@@ -109,6 +109,9 @@ class HiddenMarkovModel(struct_tools.NicePrint):
 
         # Validation
         if self.Obs.noise.C == 0 or self.Obs.noise.C.rk != self.Obs.noise.C.M:
+            print("self.Obs.noise.C", self.Obs.noise.C)
+            print("self.Obs.noise.C.rk", self.Obs.noise.C.rk)
+            print("self.Obs.noise.C.M", self.Obs.noise.C.M)
             raise ValueError("Rank-deficient R not supported.")
 
     # ndim shortcuts

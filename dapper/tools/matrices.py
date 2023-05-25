@@ -345,7 +345,8 @@ class CovMat():
 
     @staticmethod
     def _clip(d):
-        return np.where(d < 1e-8*d.max(), 0, d)
+        #return np.where(d < 1e-8*d.max(), 0, d)
+        return np.where(d < 1e-16 * d.max(), 0, d)
 
     def _do_EVD(self):
         if not self.has_done_EVD():
