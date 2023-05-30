@@ -107,7 +107,7 @@ class HiddenMarkovModel(struct_tools.NicePrint):
         if not hasattr(self.Obs, "localizer"):
             self.Obs.localizer = no_localization(self.Nx, self.Ny)
 
-        # Validation
+        # ValidationRank-
         if self.Obs.noise.C == 0 or self.Obs.noise.C.rk != self.Obs.noise.C.M:
             print("self.Obs.noise.C", self.Obs.noise.C)
             print("self.Obs.noise.C.rk", self.Obs.noise.C.rk)

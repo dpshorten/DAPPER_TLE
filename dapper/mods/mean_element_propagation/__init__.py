@@ -60,64 +60,48 @@ def convert_skyfield_earth_satellite_to_np_array(skyfield_earth_satellite,
     return np_mean_elements
 
 
-def propagation_initializer(tle_file_path, start_epoch):
 
-    global list_of_skyfield_earth_satellites, first_lines_in_pairs, second_lines_in_pairs
-
-    list_of_skyfield_earth_satellites = skyfield_load.tle_file(tle_file_path, reload=False)[start_epoch:]
-
-    file = open(tle_file_path, 'r')
-    for i in range(start_epoch):
-        file.readline()
-        file.readline()
-    first_lines_in_pairs = []
-    second_lines_in_pairs = []
-    # TODO: loop this to end of file
-    for i in range(1000):
-        first_lines_in_pairs.append(file.readline())
-        second_lines_in_pairs.append(file.readline())
-
-
-def propagate_mean_elements(i, np_mean_elements, t, use_keplerian_coordinates = True):
-
-    SkyfieldEarthSatellite_initial = list_of_skyfield_earth_satellites[t]
-    SkyfieldEarthSatellite_post = list_of_skyfield_earth_satellites[t + 1]
+def propagate_mean_elements(particle_index,
+                            np_mean_elements_of_particles,
+                            TLE_line_pair_initial,
+                            TLE_line_pair_post,
+                            use_keplerian_coordinates = True):
 
     ts = skyfield_load.timescale()
-    dummy_SkyfieldEarthSatellite = EarthSatellite(first_lines_in_pairs[t], second_lines_in_pairs[t], 'ISS (ZARYA)', ts)
+    Skyfield_EarthSatellite_initial = EarthSatellite(TLE_line_pair_initial[0], TLE_line_pair_initial[1], '', ts)
+    Skyfield_EarthSatellite_post = EarthSatellite(TLE_line_pair_post[0], TLE_line_pair_post[1], '', ts)
 
-    np_mean_elements = np_mean_elements[:, i]
+    np_particle_mean_elements = np_mean_elements_of_particles[:, particle_index]
 
     if use_keplerian_coordinates:
         satrec = Satrec()
         satrec.sgp4init(
             WGS84,  # gravity model
             'i',  # 'a' = old AFSPC mode, 'i' = improved mode
-            SkyfieldEarthSatellite_initial.model.satnum,  # satnum: Satellite number
-            # SkyfieldEarthSatellite_initial.epoch.tai - 2433281.5,  # epoch: days since 1949 December 31 00:00 UT
-            SkyfieldEarthSatellite_initial.model.jdsatepoch - 2433281.5 + SkyfieldEarthSatellite_initial.model.jdsatepochF,
-            SkyfieldEarthSatellite_initial.model.bstar,  # bstar: drag coefficient (/earth radii)
-            SkyfieldEarthSatellite_initial.model.ndot,  # ndot: ballistic coefficient (revs/day)
-            SkyfieldEarthSatellite_initial.model.nddot,  # nddot: second derivative of mean motion (revs/day^3)
-            np_mean_elements[1],  # ecco: eccentricity
-            np_mean_elements[3],  # argpo: argument of perigee (radians)
-            np_mean_elements[2],  # inclo: inclination (radians)
-            np_mean_elements[5],  # mo: mean anomaly (radians)
-            np_mean_elements[0],  # no_kozai: mean motion (radians/minute)
-            np_mean_elements[4],  # nodeo: right ascension of ascending node (radians)
-
+            Skyfield_EarthSatellite_initial.model.satnum,  # satnum: Satellite number
+            # Skyfield_EarthSatellite_initial.epoch.tai - 2433281.5,  # epoch: days since 1949 December 31 00:00 UT
+            Skyfield_EarthSatellite_initial.model.jdsatepoch - 2433281.5 + Skyfield_EarthSatellite_initial.model.jdsatepochF,
+            Skyfield_EarthSatellite_initial.model.bstar,  # bstar: drag coefficient (/earth radii)
+            Skyfield_EarthSatellite_initial.model.ndot,  # ndot: ballistic coefficient (revs/day)
+            Skyfield_EarthSatellite_initial.model.nddot,  # nddot: second derivative of mean motion (revs/day^3)
+            np_particle_mean_elements[1],  # ecco: eccentricity
+            np_particle_mean_elements[3],  # argpo: argument of perigee (radians)
+            np_particle_mean_elements[2],  # inclo: inclination (radians)
+            np_particle_mean_elements[5],  # mo: mean anomaly (radians)
+            np_particle_mean_elements[0],  # no_kozai: mean motion (radians/minute)
+            np_particle_mean_elements[4],  # nodeo: right ascension of ascending node (radians)
         )
 
     else:
 
         orb = pyorb.Orbit(M0=pyorb.M_earth, degrees=True)
 
-        orb.x = 1e4 * np_mean_elements[0]
-        orb.y = 1e4 * np_mean_elements[1]
-        orb.z = 1e4 * np_mean_elements[2]
-        orb.vx = np_mean_elements[3]
-        orb.vy = np_mean_elements[4]
-        orb.vz = np_mean_elements[5]
+        orb.x = 1e4 * np_particle_mean_elements[0]
+        orb.y = 1e4 * np_particle_mean_elements[1]
+        orb.z = 1e4 * np_particle_mean_elements[2]
+        orb.vx = np_particle_mean_elements[3]
+        orb.vy = np_particle_mean_elements[4]
+        orb.vz = np_particle_mean_elements[5]
 
         mean_motion = 60 * ((astropy.constants.GM_earth.value ** (1 / 3)) / orb.a[0]) ** (3 / 2)
 
@@ -125,12 +109,12 @@ def propagate_mean_elements(i, np_mean_elements, t, use_keplerian_coordinates = 
         satrec.sgp4init(
             WGS84,  # gravity model
             'i',  # 'a' = old AFSPC mode, 'i' = improved mode
-            SkyfieldEarthSatellite_initial.model.satnum,  # satnum: Satellite number
-            #SkyfieldEarthSatellite_initial.epoch.tai - 2433281.5,  # epoch: days since 1949 December 31 00:00 UT
-            SkyfieldEarthSatellite_initial.model.jdsatepoch - 2433281.5 + SkyfieldEarthSatellite_initial.model.jdsatepochF,
-            SkyfieldEarthSatellite_initial.model.bstar,  # bstar: drag coefficient (/earth radii)
-            SkyfieldEarthSatellite_initial.model.ndot,  # ndot: ballistic coefficient (revs/day)
-            SkyfieldEarthSatellite_initial.model.nddot,  # nddot: second derivative of mean motion (revs/day^3)
+            Skyfield_EarthSatellite_initial.model.satnum,  # satnum: Satellite number
+            #Skyfield_EarthSatellite_initial.epoch.tai - 2433281.5,  # epoch: days since 1949 December 31 00:00 UT
+            Skyfield_EarthSatellite_initial.model.jdsatepoch - 2433281.5 + Skyfield_EarthSatellite_initial.model.jdsatepochF,
+            Skyfield_EarthSatellite_initial.model.bstar,  # bstar: drag coefficient (/earth radii)
+            Skyfield_EarthSatellite_initial.model.ndot,  # ndot: ballistic coefficient (revs/day)
+            Skyfield_EarthSatellite_initial.model.nddot,  # nddot: second derivative of mean motion (revs/day^3)
 
             orb.e[0] * (np.pi / 180),  # ecco: eccentricity
             orb.omega[0] * (np.pi / 180),  # argpo: argument of perigee (radians)
@@ -140,30 +124,34 @@ def propagate_mean_elements(i, np_mean_elements, t, use_keplerian_coordinates = 
             orb.Omega[0] * (np.pi / 180),  # nodeo: right ascension of ascending node (radians)
         )
 
-    sat = dummy_SkyfieldEarthSatellite
-    sat.model = satrec
+    Skyfield_EarthSatellite_initial.model = satrec
+    Skyfield_EarthSatellite_initial.at(Skyfield_EarthSatellite_post.epoch)
 
-    sat.at(SkyfieldEarthSatellite_post.epoch)
-
-    return convert_skyfield_earth_satellite_to_np_array(sat, use_keplerian_coordinates)
+    return convert_skyfield_earth_satellite_to_np_array(Skyfield_EarthSatellite_initial, use_keplerian_coordinates)
 
 
 @modelling.ens_compatible
-def step(x, t, dt, tle_file_path, start_epoch, use_keplerian_coordinates = True):
+def step(x, t, dt, process_pool, list_of_TLE_line_pairs, use_keplerian_coordinates = True):
 
-    pool = multiprocessing.Pool(10, initializer=propagation_initializer, initargs = (tle_file_path, start_epoch))
-
-    out1 = pool.map(
+    propagated_particles = process_pool.map(
         partial(propagate_mean_elements,
-                np_mean_elements = x,
-                t = t,
+                np_mean_elements_of_particles = x,
+                TLE_line_pair_initial = list_of_TLE_line_pairs[t],
+                TLE_line_pair_post = list_of_TLE_line_pairs[t + dt],
                 use_keplerian_coordinates = use_keplerian_coordinates
                 ),
         range(0, x.shape[1])
     )
-    return np.transpose(np.array(out1))
 
-params = dict(labels='012345')
-def LPs(jj=None, params=params): return [
-   (1, LP.sliding_marginals(obs_inds=tuple(np.arange(10)), zoomy=0.75, **params)),
-]
+    return np.transpose(np.array(propagated_particles))
+
+
+def live_plots(plot_marginals = False, params = dict(labels='012345')):
+    """
+    Sets up the live plotting functionality for Dapper.
+    """
+
+    if plot_marginals:
+        return [(1, LP.sliding_marginals(obs_inds=tuple(np.arange(10)), zoomy=0.75, **params)),]
+    else:
+        return []
