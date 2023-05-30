@@ -15,11 +15,15 @@ NUM_PROCESSES = 10
 TLE_FILES_DIRECTORY = "/home/david/Projects/TLE_observation_benchmark_dataset/processed_files/"
 TLE_FILE_NAME = "Fengyun-2D.tle"
 START_EPOCH = 100
+NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION = 500
+NUM_PARTICLES = 1000
+
 # If set to False, Cartesian coordinates will be used
 USE_KEPLERIAN_COORDINATES = True
 # Plotting the sliding marginal time series slows things down a lot, so it's useful to be able to turn it off
 PLOT_MARGINALS = True
 
+process_pool = multiprocessing.Pool(NUM_PROCESSES)
 
 # Having a store of the TLE lines allows us to create Skyfield EarthSatellite objects when required. Creating these
 # objects directly from the TLE lines is a foolproof way of ensuring that settings such as epoch times are correct.
@@ -30,46 +34,48 @@ list_of_TLE_line_pairs = []
 current_TLE_line_pair = []
 i = 0
 for line in TLE_file:
-    if i < START_EPOCH:
-        pass
-    elif (i - START_EPOCH) % 2 == 0:
+    # First line in pair
+    if i >= START_EPOCH and (i - START_EPOCH) % 2 == 0:
         current_TLE_line_pair = [line]
-    else:
+    # Second line in pair
+    elif i >= START_EPOCH:
         current_TLE_line_pair.append(line)
         list_of_TLE_line_pairs.append(current_TLE_line_pair)
     i += 1
 
-
-
-Tplot = 20
-tseq = modelling.Chronology(1, dko=1, Ko=1000, Tplot=Tplot, BurnIn=4*Tplot)
-
+# Instantiate our 'ground-truth' of mean elements (xx) as the observed TLE values. This gives us something for the accuracy
+# visualisations to compare against.
 xx = []
-list_of_Skyfield_EarthSatellites = skyfield_load.tle_file(TLE_FILES_DIRECTORY + TLE_FILE_NAME, reload=False)[START_EPOCH:]
+list_of_Skyfield_EarthSatellites = skyfield_load.tle_file(TLE_FILES_DIRECTORY + TLE_FILE_NAME, reload = False)[START_EPOCH:]
 for sat in list_of_Skyfield_EarthSatellites:
-    xx.append(convert_skyfield_earth_satellite_to_np_array(sat, use_keplerian_coordinates=USE_KEPLERIAN_COORDINATES))
-
+    xx.append(convert_skyfield_earth_satellite_to_np_array(sat, use_keplerian_coordinates = USE_KEPLERIAN_COORDINATES))
 xx = np.array(xx)
+
+# The observations are then the same as the ground truth
 yy = np.copy(xx)
 
-x0 = convert_skyfield_earth_satellite_to_np_array(list_of_Skyfield_EarthSatellites[0], use_keplerian_coordinates=USE_KEPLERIAN_COORDINATES)
+x0 = convert_skyfield_earth_satellite_to_np_array(list_of_Skyfield_EarthSatellites[0], use_keplerian_coordinates = USE_KEPLERIAN_COORDINATES)
 Nx = len(x0)
 
-jj = np.arange(Nx)  # obs_inds
+# Estimate both the model and observation uncertainty as the covariance of the residuals when propagating the TLEs from
+# one epoch to the subsequent epoch.
+propagations = np.zeros((NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION, xx.shape[1]))
+for i in range(NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION):
+    propagations[i, :] = np.squeeze(step(np.expand_dims(xx[i], axis = 0),
+                                         i,
+                                         1,
+                                         process_pool,
+                                         list_of_TLE_line_pairs,
+                                         USE_KEPLERIAN_COORDINATES), axis = 0)
+residuals = propagations[:NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION] - xx[1:(NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION + 1), :]
+residuals_covariance = np.cov(residuals, rowvar = False)
+# Print out the eigenvalues of this covariance matrix, as this is what is leading to Dapper complaining about
+# 'rank deficient' matrices.
+print("eigenvalues of residuals covariance", sla.eigh(residuals_covariance)[0])
+
+jj = np.arange(Nx)
 Obs = modelling.partial_Id_Obs(Nx, jj)
-
-process_pool = multiprocessing.Pool(NUM_PROCESSES)
-
-props = np.zeros((xx.shape[0]-1, xx.shape[1]))
-for i in range(500):
-    props[i, :] = np.squeeze(step(np.expand_dims(xx[i], axis = 0), i, 1,
-                                  process_pool,
-                                  list_of_TLE_line_pairs,
-                                  USE_KEPLERIAN_COORDINATES), axis = 0)
-errors = props[:500] - xx[1:501, :]
-errors_cov = np.cov(errors, rowvar = False)
-
-Obs['noise'] = modelling.GaussRV(C=CovMat(1e0 * errors_cov, kind = 'full'))
+Obs['noise'] = modelling.GaussRV(C = CovMat(residuals_covariance, kind ='full'))
 
 Dyn = {
     'M': Nx,
@@ -77,14 +83,15 @@ Dyn = {
                      process_pool = process_pool,
                      list_of_TLE_line_pairs = list_of_TLE_line_pairs,
                      use_keplerian_coordinates = USE_KEPLERIAN_COORDINATES),
-    'noise': modelling.GaussRV(C=CovMat(1e0 * errors_cov, kind = 'full')),
+    'noise': modelling.GaussRV(C = CovMat(residuals_covariance, kind ='full')),
 }
 
-X0 = modelling.GaussRV(C=CovMat(1e0*errors_cov, kind = 'full'), mu=x0)
+X0 = modelling.GaussRV(C = CovMat(residuals_covariance, kind ='full'), mu = x0)
 
+tseq = modelling.Chronology(1, dko = 1, Ko = 1000, Tplot = 20, BurnIn = 80)
 HMM = modelling.HiddenMarkovModel(Dyn, Obs, tseq, X0)
 HMM.liveplotters = live_plots(plot_marginals = PLOT_MARGINALS)
-xp = da.PartFilt(N=1000, reg=1, NER=1, qroot = 1, wroot = 1.0)
+xp = da.PartFilt(N = NUM_PARTICLES, reg = 1, NER = 1, qroot = 1, wroot = 1)
 xp.assimilate(HMM, xx[:], yy[:], liveplots=True)
 xp.stats.average_in_time()
 xp.stats.replay()

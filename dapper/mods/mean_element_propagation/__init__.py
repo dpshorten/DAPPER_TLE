@@ -31,16 +31,16 @@ def convert_skyfield_earth_satellite_to_np_array(skyfield_earth_satellite,
 
     else:
 
-        a = (1 *
-             (
-                     (astropy.constants.GM_earth.value ** (1/3)) /
-                     (
-                             (skyfield_earth_satellite.model.nm / 60)**(2/3)
-                     )
-             )
-             )
+        a = (
+                 (
+                         astropy.constants.GM_earth.value ** (1/3)
+                 ) /
+                 (
+                         (skyfield_earth_satellite.model.nm / 60) ** (2/3)
+                 )
+            )
 
-        orb = pyorb.Orbit(M0=pyorb.M_earth, degrees=True)
+        orb = pyorb.Orbit(M0 = pyorb.M_earth, degrees = True)
         orb.update(a = a,
                    e = skyfield_earth_satellite.model.em,
                    i = skyfield_earth_satellite.model.im * (180/np.pi),
