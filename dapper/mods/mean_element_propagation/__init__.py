@@ -12,22 +12,19 @@ import astropy.constants
 import multiprocessing
 from functools import partial
 
-MU = 3.986004418e14
-SECONDS_PER_DAY = 60 * 60 * 24
-
-def convert_skyfield_earth_satellite_to_np_array(skyfield_earth_satellite,
-                                                 use_keplerian_coordinates = True):
+def convert_Skyfield_EarthSatellite_to_np_array(skyfield_EarthSatellite,
+                                                use_keplerian_coordinates = True):
 
     np_mean_elements = np.zeros(6)
 
     if use_keplerian_coordinates:
 
-        np_mean_elements[0] = skyfield_earth_satellite.model.nm
-        np_mean_elements[1] = skyfield_earth_satellite.model.em
-        np_mean_elements[2] = skyfield_earth_satellite.model.im
-        np_mean_elements[3] = skyfield_earth_satellite.model.om
-        np_mean_elements[4] = skyfield_earth_satellite.model.Om
-        np_mean_elements[5] = skyfield_earth_satellite.model.mm
+        np_mean_elements[0] = skyfield_EarthSatellite.model.nm
+        np_mean_elements[1] = skyfield_EarthSatellite.model.em
+        np_mean_elements[2] = skyfield_EarthSatellite.model.im
+        np_mean_elements[3] = skyfield_EarthSatellite.model.om
+        np_mean_elements[4] = skyfield_EarthSatellite.model.Om
+        np_mean_elements[5] = skyfield_EarthSatellite.model.mm
 
     else:
 
@@ -36,17 +33,17 @@ def convert_skyfield_earth_satellite_to_np_array(skyfield_earth_satellite,
                          astropy.constants.GM_earth.value ** (1/3)
                  ) /
                  (
-                         (skyfield_earth_satellite.model.nm / 60) ** (2/3)
+                         (skyfield_EarthSatellite.model.nm / 60) ** (2 / 3)
                  )
             )
 
         orb = pyorb.Orbit(M0 = pyorb.M_earth, degrees = True)
         orb.update(a = a,
-                   e = skyfield_earth_satellite.model.em,
-                   i = skyfield_earth_satellite.model.im * (180/np.pi),
-                   omega = skyfield_earth_satellite.model.om * (180/np.pi),
-                   Omega = skyfield_earth_satellite.model.Om * (180/np.pi),
-                   anom = skyfield_earth_satellite.model.mm * (180/np.pi),
+                   e = skyfield_EarthSatellite.model.em,
+                   i =skyfield_EarthSatellite.model.im * (180 / np.pi),
+                   omega =skyfield_EarthSatellite.model.om * (180 / np.pi),
+                   Omega =skyfield_EarthSatellite.model.Om * (180 / np.pi),
+                   anom =skyfield_EarthSatellite.model.mm * (180 / np.pi),
                    type = 'mean',
                    )
 
@@ -103,7 +100,7 @@ def propagate_mean_elements(particle_index,
         orb.vy = np_particle_mean_elements[4]
         orb.vz = np_particle_mean_elements[5]
 
-        mean_motion = 60 * ((astropy.constants.GM_earth.value ** (1 / 3)) / orb.a[0]) ** (3 / 2)
+        mean_motion = 60 * (((astropy.constants.GM_earth.value ** (1 / 3)) / orb.a[0]) ** (3 / 2))
 
         satrec = Satrec()
         satrec.sgp4init(
@@ -116,7 +113,7 @@ def propagate_mean_elements(particle_index,
             Skyfield_EarthSatellite_initial.model.ndot,  # ndot: ballistic coefficient (revs/day)
             Skyfield_EarthSatellite_initial.model.nddot,  # nddot: second derivative of mean motion (revs/day^3)
 
-            orb.e[0] * (np.pi / 180),  # ecco: eccentricity
+            orb.e[0],  # ecco: eccentricity
             orb.omega[0] * (np.pi / 180),  # argpo: argument of perigee (radians)
             orb.i[0] * (np.pi / 180),  # inclo: inclination (radians)
             orb.anom[0] * (np.pi / 180),  # mo: mean anomaly (radians)
@@ -127,7 +124,7 @@ def propagate_mean_elements(particle_index,
     Skyfield_EarthSatellite_initial.model = satrec
     Skyfield_EarthSatellite_initial.at(Skyfield_EarthSatellite_post.epoch)
 
-    return convert_skyfield_earth_satellite_to_np_array(Skyfield_EarthSatellite_initial, use_keplerian_coordinates)
+    return convert_Skyfield_EarthSatellite_to_np_array(Skyfield_EarthSatellite_initial, use_keplerian_coordinates)
 
 
 @modelling.ens_compatible

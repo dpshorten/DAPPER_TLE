@@ -345,7 +345,11 @@ class CovMat():
 
     @staticmethod
     def _clip(d):
+
         #return np.where(d < 1e-8*d.max(), 0, d)
+
+        # Change by DS, aggressive clipping was causing the error: 'Rank-deficient R not supported.'
+        # (line 112 of mods/__init__.py).
         return np.where(d < 1e-16 * d.max(), 0, d)
 
     def _do_EVD(self):

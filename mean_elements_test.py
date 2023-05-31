@@ -3,7 +3,7 @@ import os
 import numpy as np
 import dapper.mods as modelling
 from skyfield.api import load as skyfield_load
-from dapper.mods.mean_element_propagation import step, live_plots, convert_skyfield_earth_satellite_to_np_array
+from dapper.mods.mean_element_propagation import step, live_plots, convert_Skyfield_EarthSatellite_to_np_array
 import pandas as pd
 import dapper.da_methods as da
 from functools import partial
@@ -17,7 +17,6 @@ TLE_FILE_NAME = "Fengyun-2D.tle"
 START_EPOCH = 100
 NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION = 500
 NUM_PARTICLES = 1000
-
 # If set to False, Cartesian coordinates will be used
 USE_KEPLERIAN_COORDINATES = True
 # Plotting the sliding marginal time series slows things down a lot, so it's useful to be able to turn it off
@@ -27,7 +26,7 @@ process_pool = multiprocessing.Pool(NUM_PROCESSES)
 
 # Having a store of the TLE lines allows us to create Skyfield EarthSatellite objects when required. Creating these
 # objects directly from the TLE lines is a foolproof way of ensuring that settings such as epoch times are correct.
-# Note that we don't want to create the EarthSatellites just yet as they are not pickle-able, so this will not be
+# Note that we don't want to create the EarthSatellite objects just yet as they are not pickle-able, so this will not be
 # compatible with the Python multiprocessing library.
 TLE_file = open(TLE_FILES_DIRECTORY + TLE_FILE_NAME, 'r')
 list_of_TLE_line_pairs = []
@@ -44,21 +43,21 @@ for line in TLE_file:
     i += 1
 
 # Instantiate our 'ground-truth' of mean elements (xx) as the observed TLE values. This gives us something for the accuracy
-# visualisations to compare against.
+# metrics to compare against.
 xx = []
 list_of_Skyfield_EarthSatellites = skyfield_load.tle_file(TLE_FILES_DIRECTORY + TLE_FILE_NAME, reload = False)[START_EPOCH:]
 for sat in list_of_Skyfield_EarthSatellites:
-    xx.append(convert_skyfield_earth_satellite_to_np_array(sat, use_keplerian_coordinates = USE_KEPLERIAN_COORDINATES))
+    xx.append(convert_Skyfield_EarthSatellite_to_np_array(sat, use_keplerian_coordinates = USE_KEPLERIAN_COORDINATES))
 xx = np.array(xx)
 
 # The observations are then the same as the ground truth
 yy = np.copy(xx)
 
-x0 = convert_skyfield_earth_satellite_to_np_array(list_of_Skyfield_EarthSatellites[0], use_keplerian_coordinates = USE_KEPLERIAN_COORDINATES)
+x0 = convert_Skyfield_EarthSatellite_to_np_array(list_of_Skyfield_EarthSatellites[0], use_keplerian_coordinates = USE_KEPLERIAN_COORDINATES)
 Nx = len(x0)
 
 # Estimate both the model and observation uncertainty as the covariance of the residuals when propagating the TLEs from
-# one epoch to the subsequent epoch.
+# one epoch to the subsequent epoch. There's probably a better way of doing this, but using this for now.
 propagations = np.zeros((NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION, xx.shape[1]))
 for i in range(NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION):
     propagations[i, :] = np.squeeze(step(np.expand_dims(xx[i], axis = 0),
@@ -66,15 +65,17 @@ for i in range(NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION):
                                          1,
                                          process_pool,
                                          list_of_TLE_line_pairs,
-                                         USE_KEPLERIAN_COORDINATES), axis = 0)
-residuals = propagations[:NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION] - xx[1:(NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION + 1), :]
+                                         USE_KEPLERIAN_COORDINATES),
+                                    axis = 0)
+residuals = propagations[:NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION, :] - xx[1:(NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION + 1), :]
 residuals_covariance = np.cov(residuals, rowvar = False)
-# Print out the eigenvalues of this covariance matrix, as this is what is leading to Dapper complaining about
-# 'rank deficient' matrices.
+# Print out the eigenvalues of this covariance matrix, as this is what is leading to the Dapper error:
+# 'Rank-deficient R not supported.'
 print("eigenvalues of residuals covariance", sla.eigh(residuals_covariance)[0])
 
-jj = np.arange(Nx)
-Obs = modelling.partial_Id_Obs(Nx, jj)
+observed_indices = np.arange(Nx)
+# Identity observation model
+Obs = modelling.partial_Id_Obs(Nx, observed_indices)
 Obs['noise'] = modelling.GaussRV(C = CovMat(residuals_covariance, kind ='full'))
 
 Dyn = {
