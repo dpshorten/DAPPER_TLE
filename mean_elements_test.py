@@ -34,10 +34,10 @@ current_TLE_line_pair = []
 i = 0
 for line in TLE_file:
     # First line in pair
-    if i >= START_EPOCH and (i - START_EPOCH) % 2 == 0:
+    if i >= 2 * START_EPOCH and (i - START_EPOCH) % 2 == 0:
         current_TLE_line_pair = [line]
     # Second line in pair
-    elif i >= START_EPOCH:
+    elif i >= 2 * START_EPOCH:
         current_TLE_line_pair.append(line)
         list_of_TLE_line_pairs.append(current_TLE_line_pair)
     i += 1
