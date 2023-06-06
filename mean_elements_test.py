@@ -11,10 +11,12 @@ from dapper.tools.matrices import CovMat
 import scipy.linalg as sla
 import multiprocessing
 
+
+
 NUM_PROCESSES = 10
 TLE_FILES_DIRECTORY = "/home/david/Projects/TLE_observation_benchmark_dataset/processed_files/"
-TLE_FILE_NAME = "Fengyun-2D.tle"
-#TLE_FILE_NAME = "Sentinel-3A.tle"
+#TLE_FILE_NAME = "Fengyun-2D.tle"
+TLE_FILE_NAME = "Jason-3.tle"
 START_EPOCH = 100
 NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION = 500
 NUM_PARTICLES = 1000
@@ -70,6 +72,8 @@ for i in range(NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION):
                                     axis = 0)
 residuals = propagations[:NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION, :] - xx[1:(NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION + 1), :]
 residuals_covariance = np.cov(residuals, rowvar = False)
+print(residuals_covariance)
+#residuals_covariance[4, 4] *= 1e4
 # Print out the eigenvalues of this covariance matrix, as this is what is leading to the Dapper error:
 # 'Rank-deficient R not supported.'
 print("eigenvalues of residuals covariance", sla.eigh(residuals_covariance)[0])
