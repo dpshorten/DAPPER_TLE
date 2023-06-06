@@ -14,6 +14,7 @@ import multiprocessing
 NUM_PROCESSES = 10
 TLE_FILES_DIRECTORY = "/home/david/Projects/TLE_observation_benchmark_dataset/processed_files/"
 TLE_FILE_NAME = "Fengyun-2D.tle"
+#TLE_FILE_NAME = "Sentinel-3A.tle"
 START_EPOCH = 100
 NUM_EPOCHS_FOR_UNCERTAINTY_ESTIMATION = 500
 NUM_PARTICLES = 1000
