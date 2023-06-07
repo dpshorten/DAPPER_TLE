@@ -13,13 +13,13 @@ from functools import partial
 import sys
 
 sys.path.insert(0, "/home/david/Projects/python-sgp4/sgp4/")
-from api import Satrec, WGS72, WGS72OLD, WGS84, jday
+from api import Satrec
 from propagation import sgp4init, sgp4
 from model import twoline2rv
 from earth_gravity import wgs84
 
 MINUTES_PER_DAY = 24 * 60
-
+JULIAN_DATE_OF_31_12_1949 = 2433281.5
 
 def convert_keplerian_coordinates_to_cartesian(keplerian_state_vector):
 
@@ -72,20 +72,13 @@ def convert_cartesian_coordinates_to_keplerian(cartesian_state_vector):
     mean_motion = 60 * (((astropy.constants.GM_earth.value ** (1 / 3)) / orb.a[0]) ** (3 / 2))
 
 
-    orb.e[0],  # ecco: eccentricity
-    orb.omega[0] * (np.pi / 180),  # argpo: argument of perigee (radians)
-    orb.i[0] * (np.pi / 180),  # inclo: inclination (radians)
-    orb.anom[0] * (np.pi / 180),  # mo: mean anomaly (radians)
-    mean_motion,  # no_kozai: mean motion (radians/minute)
-    orb.Omega[0] * (np.pi / 180),  # nodeo: right ascension of ascending node (radians)
-
     keplerian_state_vector = np.zeros(6)
     keplerian_state_vector[0] = mean_motion
-    keplerian_state_vector[1] = orb.e[0]
-    keplerian_state_vector[2] = orb.i[0] * (np.pi / 180)
-    keplerian_state_vector[3] = orb.omega[0] * (np.pi / 180)
-    keplerian_state_vector[4] = orb.Omega[0] * (np.pi / 180)
-    keplerian_state_vector[5] = orb.anom[0] * (np.pi / 180)
+    keplerian_state_vector[1] = orb.e[0] # eccentricity
+    keplerian_state_vector[2] = orb.i[0] * (np.pi / 180) # inclination
+    keplerian_state_vector[3] = orb.omega[0] * (np.pi / 180) # argument of perigee
+    keplerian_state_vector[4] = orb.Omega[0] * (np.pi / 180) # right ascension
+    keplerian_state_vector[5] = orb.anom[0] * (np.pi / 180) # mean anomaly
 
     return keplerian_state_vector
 def convert_Skyfield_EarthSatellite_to_np_array(skyfield_EarthSatellite,
@@ -107,7 +100,6 @@ def convert_Skyfield_EarthSatellite_to_np_array(skyfield_EarthSatellite,
     brouwer_mean_motion = skyfield_EarthSatellite.model.no_kozai / (1.0 + del_)
 
     np_mean_elements[0] = brouwer_mean_motion
-    #np_mean_elements[0] = skyfield_EarthSatellite.model.nm  # eccentricity
     np_mean_elements[1] = skyfield_EarthSatellite.model.em  # eccentricity
     np_mean_elements[2] = skyfield_EarthSatellite.model.im # inclination
     np_mean_elements[3] = skyfield_EarthSatellite.model.om # argument of perigee
@@ -125,11 +117,6 @@ def propagate_mean_elements(particle_index,
                             TLE_line_pair_post,
                             use_keplerian_coordinates = True):
 
-    #ts = skyfield_load.timescale()
-
-    #Skyfield_EarthSatellite_initial = EarthSatellite(TLE_line_pair_initial[0], TLE_line_pair_initial[1], '', ts)
-    #Skyfield_EarthSatellite_post = EarthSatellite(TLE_line_pair_post[0], TLE_line_pair_post[1], '', ts)
-
     np_particle_mean_elements = np_mean_elements_of_particles[:, particle_index]
 
     if not use_keplerian_coordinates:
@@ -139,8 +126,7 @@ def propagate_mean_elements(particle_index,
     satrec_post = twoline2rv(TLE_line_pair_post[0], TLE_line_pair_post[1], wgs84)
 
     sgp4init(wgs84, 'i', satrec_initial.satnum,
-             satrec_initial.jdsatepoch + satrec_initial.jdsatepochF - 2433281.5,
-             #satrec_initial.jdsatepoch + satrec_initial.jdsatepochF,
+             satrec_initial.jdsatepoch + satrec_initial.jdsatepochF - JULIAN_DATE_OF_31_12_1949,
              satrec_initial.bstar,
              satrec_initial.ndot,
              satrec_initial.nddot,
@@ -152,25 +138,10 @@ def propagate_mean_elements(particle_index,
              np_particle_mean_elements[4],
              satrec_initial)
 
-    # sgp4init(wgs84, 'i', satrec_initial.satnum,
-    #          #satrec_initial.jdsatepoch + satrec_initial.jdsatepochF - 2433281.5,
-    #          satrec_initial.jdsatepoch + satrec_initial.jdsatepochF,
-    #          satrec_initial.bstar,
-    #          satrec_initial.ndot,
-    #          satrec_initial.nddot,
-    #          satrec_initial.ecco,
-    #          satrec_initial.argpo,
-    #          satrec_initial.inclo,
-    #          satrec_initial.mo,
-    #          satrec_initial.no_kozai,
-    #          satrec_initial.nodeo,
-    #          satrec_initial)
-
     tsince = ((satrec_post.jdsatepoch - satrec_initial.jdsatepoch) * MINUTES_PER_DAY +
               (satrec_post.jdsatepochF - satrec_initial.jdsatepochF) * MINUTES_PER_DAY)
 
     sgp4(satrec_initial, tsince)
-    #sgp4(satrec_initial, 0)
 
     np_propagated_mean_elements = np.zeros(6)
     np_propagated_mean_elements[0] = satrec_initial.nm  # mean motion
@@ -201,12 +172,21 @@ def step(x, t, dt, process_pool, list_of_TLE_line_pairs, use_keplerian_coordinat
     return np.transpose(np.array(propagated_particles))
 
 
-def live_plots(plot_marginals = False, params = dict(labels='012345', ens_props = dict(alpha = 0.1))):
+def live_plots(plot_marginals = False, use_keplerian_coordinates = True, params = dict()):
     """
     Sets up the live plotting functionality for Dapper.
     """
 
+    if use_keplerian_coordinates:
+        labels = ["mean motion", "ecc", "incl", "arg. per.", "right asc.", "mean anomaly"]
+    else:
+        labels = ["x", "y", "z", "v_x", "v_y", "v_z"]
+
     if plot_marginals:
-        return [(1, LP.sliding_marginals(obs_inds=tuple(np.arange(10)), zoomy=0.75, **params)),]
+        return [(1, LP.sliding_marginals(obs_inds=tuple(np.arange(10)),
+                                         zoomy = 0.75,
+                                         ens_props = dict(alpha = 0.1),
+                                         labels = labels,
+                                         **params)),]
     else:
         return []

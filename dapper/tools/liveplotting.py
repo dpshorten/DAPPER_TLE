@@ -597,7 +597,7 @@ class correlations:
             ax.set_title("State correlation matrix:", y=1.07)
             ax.xaxis.tick_top()
 
-            # ax2 = inset_axes(ax,width="30%",height="60%",loc=3)
+            # ax2 = inset_axes(ax,width="30%",height="60%",loc=p3)
             line_AC, = ax2.plot(arange(Nx), ones(Nx), label='Correlation')
             line_AA, = ax2.plot(arange(Nx), ones(Nx), label='Abs. corr.')
             _        = ax2.hlines(0, 0, Nx-1, 'k', 'dotted', lw=1)
