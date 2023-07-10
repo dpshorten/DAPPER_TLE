@@ -10,6 +10,7 @@ from functools import partial
 from dapper.tools.matrices import CovMat
 import scipy.linalg as sla
 import multiprocessing
+import yaml
 
 from python_parameters import base_package_load_path
 sys.path.insert(0, base_package_load_path)
@@ -67,10 +68,13 @@ Dyn = {
 
 X0 = modelling.GaussRV(C = CovMat(residuals_covariance, kind ='full'), mu = x0)
 
-tseq = modelling.Chronology(1, dko = 1, Ko = 1000, Tplot = 20, BurnIn = 80)
+tseq = modelling.Chronology(dt=1, dko=1, Ko=30, Tplot=20, BurnIn=10)
 HMM = modelling.HiddenMarkovModel(Dyn, Obs, tseq, X0)
 HMM.liveplotters = live_plots(plot_marginals = PLOT_MARGINALS, use_keplerian_coordinates = USE_KEPLERIAN_COORDINATES)
 xp = da.PartFilt(N = dict_parameters["num particles"], reg = 1, NER = 1, qroot = 1, wroot = 1)
 xp.assimilate(HMM, xx[:], yy[:], liveplots=True)
-xp.stats.average_in_time()
+#xp.stats.average_in_time()
 xp.stats.replay()
+print(dir(xp.stats.HMM))
+print(dir(xp.stats))
+print(dir(xp))
