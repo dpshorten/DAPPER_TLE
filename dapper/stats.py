@@ -260,6 +260,16 @@ class Stats(series.StatPrint):
         """Ensemble and Particle filter (weighted/importance) assessment."""
         N, Nx = E.shape
 
+        #now.like = E
+
+        #logL = -0.5 * np.sum(((y - self.HMM.Obs(E, 1)) @ self.HMM.Obs.noise.C.sym_sqrt_inv)**2, axis=1)
+        #logW = np.log(w)
+        #like = np.sum(np.exp(logL + logW))
+        #print("logFL", logL[0])
+        #print("logW", logW[0])
+        #print("like", like)
+        #now.like = like
+
         # weights
         if w is None:
             w = np.ones(N)/N  # All equal. Also, rm attr from stats:

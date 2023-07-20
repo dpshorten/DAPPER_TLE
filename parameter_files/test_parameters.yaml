@@ -1,3 +1,7 @@
 dapper n jobs: 12
 start epoch: 100
-num particles: 1000
+num particles: 500
+
+detection results save suffix: "_detections.pkl"
+detection results save directory: "./detection_results/"
+plots save directory path: "./results_plots/"

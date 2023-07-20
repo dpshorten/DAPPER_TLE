@@ -7,6 +7,10 @@ from dapper.stats import unbias_var, weight_degeneracy
 from dapper.tools.linalg import mldiv, mrdiv, pad0, svd0, tinv
 from dapper.tools.matrices import chol_reduce, funm_psd
 from dapper.tools.progressbar import progbar
+import dapper.mods as modelling
+from dapper.tools.matrices import CovMat
+
+from scipy.stats import multivariate_normal
 
 from . import da_method
 
@@ -53,6 +57,8 @@ class PartFilt:
     def assimilate(self, HMM, xx, yy):
         N, Nx, Rm12 = self.N, HMM.Dyn.M, HMM.Obs.noise.C.sym_sqrt_inv
 
+        self.likelihoods = np.zeros(HMM.tseq.Ko + 1)
+
         E = HMM.X0.sample(N)
         w = 1/N*np.ones(N)
 
@@ -73,7 +79,30 @@ class PartFilt:
                 self.stats.assess(k, ko, 'f', E=E, w=w)
 
                 innovs = (yy[ko] - HMM.Obs(E, t)) @ Rm12.T
-                w      = reweight(w, innovs=innovs)
+
+                #self.likelihoods[ko] = np.sum(np.exp(np.log(w) -0.5 * np.sum(innovs**2, axis = 1)))
+                #print(HMM.Obs(yy[ko], t))
+                #print(HMM.Obs(yy[ko], t))
+                diag = np.array(HMM.Obs.noise.C.diag)
+                cov = np.array(HMM.Obs.noise.C.full)
+                #diag[diag < 1e-12] = 1e-12
+                #mu = np.zeros(cov.shape[0])
+                #print(E)
+                likelihood = 0
+                full_likelihood = 0
+                for i in range(E.shape[0]):
+                    #print(diag)
+                    likelihood += w[i] * multivariate_normal.pdf(yy[ko][4], mean=E[i][4], cov=cov[4, 4], allow_singular = True)
+                    full_likelihood += w[i] * multivariate_normal.pdf(yy[ko], mean=E[i], cov=cov, allow_singular = True)
+                print(full_likelihood)
+                self.likelihoods[ko] = likelihood
+                if full_likelihood < 10:
+                    print("\n\n*****resampling*****\n\n")
+                    Xn = modelling.GaussRV(C=CovMat(HMM.Obs.noise.C.full, kind='full'), mu=yy[ko])
+                    E = Xn.sample(N)
+
+
+                w = reweight(w, innovs=innovs)
 
                 if trigger_resampling(w, self.NER, [self.stats, E, k, ko]):
                     C12     = self.reg*auto_bandw(N, Nx)*raw_C12(E, w)
