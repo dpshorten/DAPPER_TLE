@@ -100,7 +100,8 @@ def da_method(*default_dataclasses):
         cls = dataclass(cls)
 
         # Define the new assimilate method (has bells and whistles)
-        def assimilate(self, HMM, xx, yy, desc=None, fail_gently=False, **stat_kwargs):
+        def assimilate(self, HMM, xx, yy, anomaly_threshold, indices_for_anomaly_detection, covariance_for_anomaly_detection,
+                       desc=None, fail_gently=False, **stat_kwargs):
             # Progressbar name
             pb_name_hook = self.da_method if desc is None else desc # noqa
 
@@ -110,7 +111,7 @@ def da_method(*default_dataclasses):
             # Assimilate
             time0 = time.time()
             try:
-                _assimilate(self, HMM, xx, yy)
+                _assimilate(self, HMM, xx, yy, anomaly_threshold, indices_for_anomaly_detection, covariance_for_anomaly_detection)
             except Exception as ERR:
                 if fail_gently:
                     self.crashed = True

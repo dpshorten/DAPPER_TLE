@@ -27,9 +27,11 @@ def propagate_mean_elements(particle_index,
                             np_mean_elements_of_particles,
                             tle_line_pair_initial,
                             tle_line_pair_post,
+                            normalisation_weights,
                             use_keplerian_coordinates = True):
 
     np_particle_mean_elements = np_mean_elements_of_particles[:, particle_index]
+    np_particle_mean_elements = np.multiply(np_particle_mean_elements, normalisation_weights)
 
     if not use_keplerian_coordinates:
         np_particle_mean_elements = convert_np_cartesian_coordinates_to_keplerian(np_particle_mean_elements)
@@ -37,18 +39,22 @@ def propagate_mean_elements(particle_index,
     np_propagated_mean_elements = propagate_np_mean_elements(np_particle_mean_elements, tle_line_pair_initial, tle_line_pair_post)
 
     if use_keplerian_coordinates:
-        return np_propagated_mean_elements
+        return np.divide(np_propagated_mean_elements, normalisation_weights)
     else:
-        return convert_np_keplerian_coordinates_to_cartesian(np_propagated_mean_elements)
+        return np.divide(
+            convert_np_keplerian_coordinates_to_cartesian(np_propagated_mean_elements),
+            normalisation_weights
+        )
 
 @modelling.ens_compatible
-def step(x, t, dt, process_pool, satelliteTLEData_object, use_keplerian_coordinates = True):
+def step(x, t, dt, process_pool, satelliteTLEData_object, normalisation_weights, use_keplerian_coordinates = True):
 
     propagated_particles = process_pool.map(
         partial(propagate_mean_elements,
                 np_mean_elements_of_particles = x,
                 tle_line_pair_initial = satelliteTLEData_object.list_of_tle_line_tuples[t],
                 tle_line_pair_post = satelliteTLEData_object.list_of_tle_line_tuples[t + dt],
+                normalisation_weights = normalisation_weights,
                 use_keplerian_coordinates = use_keplerian_coordinates
                 ),
         range(0, x.shape[1])

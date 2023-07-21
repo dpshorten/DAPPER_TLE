@@ -1,7 +1,9 @@
 dapper n jobs: 12
 start epoch: 100
-num particles: 500
+num particles: 250
 
+method name: "filter"
 detection results save suffix: "_detections.pkl"
+method base directory: "/home/david/Projects/DAPPER_TLE/"
 detection results save directory: "./detection_results/"
-plots save directory path: "./results_plots/"
+

@@ -54,7 +54,7 @@ class PartFilt:
     # if miN < 1:
     # miN = N*miN
 
-    def assimilate(self, HMM, xx, yy):
+    def assimilate(self, HMM, xx, yy, anomaly_threshold, indices_for_anomaly_detection, covariance_for_anomaly_detection):
         N, Nx, Rm12 = self.N, HMM.Dyn.M, HMM.Obs.noise.C.sym_sqrt_inv
 
         self.likelihoods = np.zeros(HMM.tseq.Ko + 1)
@@ -92,14 +92,21 @@ class PartFilt:
                 full_likelihood = 0
                 for i in range(E.shape[0]):
                     #print(diag)
-                    likelihood += w[i] * multivariate_normal.pdf(yy[ko][4], mean=E[i][4], cov=cov[4, 4], allow_singular = True)
-                    full_likelihood += w[i] * multivariate_normal.pdf(yy[ko], mean=E[i], cov=cov, allow_singular = True)
-                print(full_likelihood)
-                self.likelihoods[ko] = likelihood
-                if full_likelihood < 10:
-                    print("\n\n*****resampling*****\n\n")
+                    likelihood += np.log(w[i]) + multivariate_normal.logpdf(yy[ko][indices_for_anomaly_detection],
+                                                                            mean=E[i][indices_for_anomaly_detection],
+                                                                            cov=covariance_for_anomaly_detection,
+                                                                            allow_singular = True)
+                    full_likelihood += np.log(w[i]) + multivariate_normal.logpdf(yy[ko], mean=E[i], cov=cov, allow_singular = True)
+                #print(full_likelihood)
+                if full_likelihood < anomaly_threshold:
+                    #if full_likelihood == 0:
+                     #   print("underflow")
+                    #print("\n*****resampling*****\n")
                     Xn = modelling.GaussRV(C=CovMat(HMM.Obs.noise.C.full, kind='full'), mu=yy[ko])
                     E = Xn.sample(N)
+                    self.likelihoods[ko] = -likelihood
+                else:
+                    self.likelihoods[ko] = -1e9
 
 
                 w = reweight(w, innovs=innovs)
