@@ -1,5 +1,4 @@
 dapper n jobs: 12
-start epoch: 100
 num particles: 250
 
 method name: "filter"
