@@ -92,15 +92,15 @@ class PartFilt:
                 full_likelihood = 0
                 for i in range(E.shape[0]):
                     #print(diag)
-                    likelihood += np.log(w[i]) + multivariate_normal.logpdf(yy[ko][indices_for_anomaly_detection],
+                    likelihood += w[i] * multivariate_normal.pdf(yy[ko][indices_for_anomaly_detection],
                                                                             mean=E[i][indices_for_anomaly_detection],
                                                                             cov=covariance_for_anomaly_detection,
                                                                             allow_singular = True)
-                    full_likelihood += np.log(w[i]) + multivariate_normal.logpdf(yy[ko], mean=E[i], cov=cov, allow_singular = True)
-                #print(full_likelihood)
+                    full_likelihood += w[i] * multivariate_normal.pdf(yy[ko], mean=E[i], cov=cov, allow_singular = True)
+                #print(full_likelihood, likelihood)
                 if full_likelihood < anomaly_threshold:
                     #if full_likelihood == 0:
-                     #   print("underflow")
+                    #    print("underflow")
                     #print("\n*****resampling*****\n")
                     Xn = modelling.GaussRV(C=CovMat(HMM.Obs.noise.C.full, kind='full'), mu=yy[ko])
                     E = Xn.sample(N)

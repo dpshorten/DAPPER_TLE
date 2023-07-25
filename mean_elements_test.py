@@ -16,15 +16,18 @@ from TLE_utilities.evaluation import run_a_method_on_satellites
 
 from python_parameters import base_package_load_path
 sys.path.insert(0, base_package_load_path)
-from TLE_utilities.tle_loading_and_preprocessing import (propagate_SatelliteTLEData_object,
+sys.path.insert(0, base_package_load_path + "/TLE_utilities")
+from tle_loading_and_preprocessing import (propagate_SatelliteTLEData_object,
                                                          get_np_mean_elements_from_satelliteTLEData_object,
-                                                         load_tle_data_from_file)
+                                                         load_tle_data_from_file,
+                                                         LIST_5_MEAN_ELEMENT_NAMES,
+                                                         LIST_6_MEAN_ELEMENT_NAMES)
 # If set to False, Cartesian coordinates will be used
 USE_KEPLERIAN_COORDINATES = True
 # Plotting the sliding marginal time series slows things down a lot, so it's useful to be able to turn it off
-PLOT_MARGINALS = True
+PLOT_MARGINALS = False
 
-INDICES_FOR_ANOMALY_DETECTION = [2, 4]
+INDICES_FOR_ANOMALY_DETECTION = [3]
 
 def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parameters, dict_parameters, satellite_index):
 
@@ -92,28 +95,38 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parame
 
     # get an idea of the range of likelihoods
     np_likelihood_estimate_values = np.zeros(xx.shape[0] - 1)
-    for i in range(xx.shape[0] - 1):
+    for i in range(xx.shape[0] - 2):
         Xi = modelling.GaussRV(C = CovMat(final_residuals_covariance, kind ='full'), mu = xx[i])
+        #E = Xi.sample(dict_parameters["num particles"])
         E = Xi.sample(50)
         innovs = (yy[i] - HMM.Obs(E, 1)) @ HMM.Obs.noise.C.sym_sqrt_inv
-        #w = reweight(np.ones(E.shape[0]), innovs=innovs)
-        w = np.ones(E.shape[0])
+        w = reweight(np.ones(E.shape[0]), innovs=innovs)
+        #w = np.ones(E.shape[0])
         E = HMM.Dyn(E, i, 1)
         np_cov_mat = np.array(HMM.Obs.noise.C.full)
         likelihood = 0
         for j in range(E.shape[0]):
-            likelihood += np.log(w[j]) + multivariate_normal.logpdf(yy[i], mean=E[j], cov=np_cov_mat, allow_singular = True)
+            likelihood += (w[j]) * multivariate_normal.pdf(yy[i], mean=E[j], cov=np_cov_mat, allow_singular = True)
         np_likelihood_estimate_values[i] = likelihood
     percentiles = np.percentile(np_likelihood_estimate_values, [10, 90])
-    anomaly_threshold = percentiles[0] - 0.0 * (percentiles[1] - percentiles[0])
+    anomaly_threshold = percentiles[0] / (percentiles[1] / percentiles[0])
     print(np_likelihood_estimate_values)
     print("anomaly threshold", anomaly_threshold)
     #quit()
 
-    HMM.liveplotters = live_plots(plot_marginals = PLOT_MARGINALS, use_keplerian_coordinates = USE_KEPLERIAN_COORDINATES)
+    element_names = LIST_6_MEAN_ELEMENT_NAMES
+    if dict_shared_parameters["use 5 elements"]:
+        element_names = LIST_5_MEAN_ELEMENT_NAMES
+
     xp = da.PartFilt(N = dict_parameters["num particles"], reg = 1, NER = 1, qroot = 1, wroot = 1)
-    xp.assimilate(HMM, xx[:], yy[:], anomaly_threshold, INDICES_FOR_ANOMALY_DETECTION, covariance_in_anomaly_dimensions, liveplots=True)
-    #xp.assimilate(HMM, xx[:], yy[:], anomaly_threshold, INDICES_FOR_ANOMALY_DETECTION, covariance_in_anomaly_dimensions)
+    if PLOT_MARGINALS:
+        HMM.liveplotters = live_plots(plot_marginals = PLOT_MARGINALS,
+                                      use_keplerian_coordinates = USE_KEPLERIAN_COORDINATES,
+                                      element_names=element_names)
+        xp.assimilate(HMM, xx[:], yy[:], anomaly_threshold, INDICES_FOR_ANOMALY_DETECTION,
+                      covariance_in_anomaly_dimensions, liveplots=True)
+    else:
+        xp.assimilate(HMM, xx[:], yy[:], anomaly_threshold, INDICES_FOR_ANOMALY_DETECTION, covariance_in_anomaly_dimensions)
 
     pd_df_results = satelliteTLEData_satellites.pd_df_tle_data.iloc[1:]
     pd_df_results.loc[:, dict_shared_parameters["detection column name"]] = xp.likelihoods

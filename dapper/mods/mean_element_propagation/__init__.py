@@ -18,8 +18,8 @@ from sgp4.earth_gravity import wgs84
 from TLE_utilities.tle_loading_and_preprocessing import (propagate_np_mean_elements,
                                                          load_tle_data_from_file,
                                                          convert_np_keplerian_coordinates_to_cartesian,
-                                                         convert_np_cartesian_coordinates_to_keplerian,
-                                                         LIST_MEAN_ELEMENT_NAMES)
+                                                         convert_np_cartesian_coordinates_to_keplerian,)
+
 
 MINUTES_PER_DAY = 24 * 60
 JULIAN_DATE_OF_31_12_1949 = 2433281.5
@@ -53,7 +53,7 @@ def step(x, t, dt, process_pool, satelliteTLEData_object, normalisation_weights,
         partial(propagate_mean_elements,
                 np_mean_elements_of_particles = x,
                 tle_line_pair_initial = satelliteTLEData_object.list_of_tle_line_tuples[t],
-                tle_line_pair_post = satelliteTLEData_object.list_of_tle_line_tuples[t + dt],
+                tle_line_pair_post = satelliteTLEData_object.list_of_tle_line_tuples[t+dt],
                 normalisation_weights = normalisation_weights,
                 use_keplerian_coordinates = use_keplerian_coordinates
                 ),
@@ -63,13 +63,13 @@ def step(x, t, dt, process_pool, satelliteTLEData_object, normalisation_weights,
     return np.transpose(np.array(propagated_particles))
 
 
-def live_plots(plot_marginals = False, use_keplerian_coordinates = True, params = dict()):
+def live_plots(plot_marginals = False, use_keplerian_coordinates = True, params = dict(), element_names = []):
     """
     Sets up the live plotting functionality for Dapper.
     """
 
     if use_keplerian_coordinates:
-        labels = LIST_MEAN_ELEMENT_NAMES
+        labels = element_names
     else:
         labels = ["x", "y", "z", "v_x", "v_y", "v_z"]
 
