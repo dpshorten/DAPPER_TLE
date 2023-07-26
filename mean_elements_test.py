@@ -14,20 +14,22 @@ import yaml
 from scipy.stats import multivariate_normal
 from TLE_utilities.evaluation import run_a_method_on_satellites
 
+from xgboost import XGBRegressor
+from sklearn.model_selection import RepeatedKFold, cross_val_score
+
 from python_parameters import base_package_load_path
 sys.path.insert(0, base_package_load_path)
 sys.path.insert(0, base_package_load_path + "/TLE_utilities")
 from tle_loading_and_preprocessing import (propagate_SatelliteTLEData_object,
                                                          get_np_mean_elements_from_satelliteTLEData_object,
                                                          load_tle_data_from_file,
-                                                         LIST_5_MEAN_ELEMENT_NAMES,
-                                                         LIST_6_MEAN_ELEMENT_NAMES)
+                                                         DICT_ELEMENT_NAMES)
 # If set to False, Cartesian coordinates will be used
-USE_KEPLERIAN_COORDINATES = True
+USE_KEPLERIAN_COORDINATES = False
 # Plotting the sliding marginal time series slows things down a lot, so it's useful to be able to turn it off
 PLOT_MARGINALS = False
 
-INDICES_FOR_ANOMALY_DETECTION = [3]
+INDICES_FOR_ANOMALY_DETECTION = [0, 4, 5]
 
 def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parameters, dict_parameters, satellite_index):
 
@@ -38,30 +40,80 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parame
     # Estimate both the model and observation uncertainty as the covariance of the residuals when propagating the TLEs from
     # one epoch to the subsequent epoch. There's probably a better way of doing this, but using this for now.
     pd_df_propagated_mean_elements = propagate_SatelliteTLEData_object(satelliteTLEData_satellites, 1)
+    #print(satelliteTLEData_satellites.pd_df_tle_data)
+    #print(pd_df_propagated_mean_elements)
+    #quit()
     pd_df_residuals = (pd_df_propagated_mean_elements - satelliteTLEData_satellites.pd_df_tle_data).dropna()
+
+    print(satelliteTLEData_satellites.pd_df_tle_data)
+
+    list_X = []
+    list_y = []
+    #for sat_name in dict_shared_parameters["all sats"]:
+    for sat_name in [dict_shared_parameters["satellite names list"][satellite_index]]:
+
+        satelliteTLEData_temp = load_tle_data_from_file(dict_shared_parameters["data files directory"] +
+                                                              sat_name +
+                                                              dict_shared_parameters["tle file suffix"],
+                                                              dict_shared_parameters["start epoch"],
+                                                              dict_shared_parameters["element set"])
+        pd_df_propagated_elements_temp = propagate_SatelliteTLEData_object(satelliteTLEData_temp, 1)
+        pd_df_residuals_temp = (pd_df_propagated_elements_temp - satelliteTLEData_temp.pd_df_tle_data).dropna()
+        #time_deltas = (satelliteTLEData_temp.pd_df_tle_data.index.values[1:] -
+         #              satelliteTLEData_temp.pd_df_tle_data.index.values[:-1]) / np.timedelta64(1, 's')
+        satelliteTLEData_temp.pd_df_tle_data = satelliteTLEData_temp.pd_df_tle_data.iloc[:-1]
+
+        #satelliteTLEData_temp.pd_df_tle_data["time deltas"] = time_deltas
+        satelliteTLEData_temp.pd_df_tle_data = satelliteTLEData_temp.pd_df_tle_data.reset_index(drop = True)
+        pd_df_residuals_temp = pd_df_residuals_temp.reset_index(drop = True)
+        list_X.append(satelliteTLEData_temp.pd_df_tle_data)
+        list_y.append(pd_df_residuals_temp)
+
+    pd_df_X = pd.concat(list_X)
+    pd_df_y = pd.concat(list_y)
+    print(pd_df_X.shape)
+    correction_model = XGBRegressor(max_depth = 10, n_estimators = 100, learning_rate = 0.2)
+    correction_model.fit(pd_df_X, pd_df_y)
+    np_correction_model_predictions = correction_model.predict(pd_df_X)
+    model_errors = np.abs(pd_df_y.values - np_correction_model_predictions)
+    print(np.mean(model_errors, axis=0))
+    print(np.mean(np.abs(pd_df_y.values), axis=0))
+    #print(preds[0, :])
+    #print(pd_df_residuals.iloc[0, :])
+    #quit()
+
     # Remove outliers for covariance estimation
+    pd_df_residuals -= np_correction_model_predictions
     q1 = pd_df_residuals.quantile(0.1)
     q3 = pd_df_residuals.quantile(0.9)
     iqr = q3 - q1
     pd_df_residuals = pd_df_residuals[~((pd_df_residuals < (q1 - 10 * iqr)) | (pd_df_residuals > (q3 + 10 * iqr))).any(axis=1)]
-    initial_residuals_covariance = np.cov(pd_df_residuals.values, rowvar = False)
+    np_residuals = pd_df_residuals.values
+    np_residuals = np.concatenate((np_residuals, -np_residuals))
+    initial_residuals_covariance = np.cov(np_residuals, rowvar = False)
+    print(initial_residuals_covariance)
     normalisation_weights = np.sqrt(np.diag(initial_residuals_covariance))
     #normalisation_weights = np.ones(initial_residuals_covariance.shape[0])
+    #normalisation_weights = [1]
     final_residuals_covariance = np.cov(np.divide(pd_df_residuals.values, normalisation_weights), rowvar = False)
-    final_residuals_covariance[1, 3] = 0 * np.sqrt(final_residuals_covariance[1,1]) * np.sqrt(final_residuals_covariance[3,3])
-    final_residuals_covariance[3, 1] = 0 * np.sqrt(final_residuals_covariance[1,1]) * np.sqrt(final_residuals_covariance[3,3])
+    #final_residuals_covariance[1, 3] = 0 * np.sqrt(final_residuals_covariance[1,1]) * np.sqrt(final_residuals_covariance[3,3])
+    #final_residuals_covariance[3, 1] = 0 * np.sqrt(final_residuals_covariance[1,1]) * np.sqrt(final_residuals_covariance[3,3])
 
     covariance_in_anomaly_dimensions = np.zeros((len(INDICES_FOR_ANOMALY_DETECTION), len(INDICES_FOR_ANOMALY_DETECTION)))
     for index_1 in range(len(INDICES_FOR_ANOMALY_DETECTION)):
         for index_2 in range(len(INDICES_FOR_ANOMALY_DETECTION)):
             covariance_in_anomaly_dimensions[index_1, index_2] = final_residuals_covariance[INDICES_FOR_ANOMALY_DETECTION[index_1],
                                                                                             INDICES_FOR_ANOMALY_DETECTION[index_2]]
+
+    #covariance_in_anomaly_dimensions = final_residuals_covariance
+
     # Print out the eigenvalues of this covariance matrix, as this is what is leading to the Dapper error:
     # 'Rank-deficient R not supported.'
     print("eigenvalues of residuals covariance", sla.eigh(final_residuals_covariance)[0])
 
     xx = np.divide(
-        get_np_mean_elements_from_satelliteTLEData_object(satelliteTLEData_satellites),
+        get_np_mean_elements_from_satelliteTLEData_object(satelliteTLEData_satellites,
+                                                          element_set=dict_shared_parameters["element set"]),
         normalisation_weights)
     # The observations are then the same as the ground truth
     yy = np.copy(xx)
@@ -81,7 +133,9 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parame
                          process_pool = process_pool,
                          satelliteTLEData_object = satelliteTLEData_satellites,
                          normalisation_weights=normalisation_weights,
-                         use_keplerian_coordinates = USE_KEPLERIAN_COORDINATES,
+                         correction_model=correction_model,
+                         #correction_model=None,
+                         element_set=dict_shared_parameters["element set"],
                          ),
         'noise': modelling.GaussRV(C = CovMat(final_residuals_covariance, kind ='full')),
         #'noise': modelling.GaussRV(C=CovMat(0*residuals_covariance, kind='full')),
@@ -94,35 +148,33 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parame
     HMM = modelling.HiddenMarkovModel(Dyn, Obs, tseq, X0)
 
     # get an idea of the range of likelihoods
-    np_likelihood_estimate_values = np.zeros(xx.shape[0] - 1)
-    for i in range(xx.shape[0] - 2):
-        Xi = modelling.GaussRV(C = CovMat(final_residuals_covariance, kind ='full'), mu = xx[i])
-        #E = Xi.sample(dict_parameters["num particles"])
-        E = Xi.sample(50)
-        innovs = (yy[i] - HMM.Obs(E, 1)) @ HMM.Obs.noise.C.sym_sqrt_inv
-        w = reweight(np.ones(E.shape[0]), innovs=innovs)
-        #w = np.ones(E.shape[0])
-        E = HMM.Dyn(E, i, 1)
-        np_cov_mat = np.array(HMM.Obs.noise.C.full)
-        likelihood = 0
-        for j in range(E.shape[0]):
-            likelihood += (w[j]) * multivariate_normal.pdf(yy[i], mean=E[j], cov=np_cov_mat, allow_singular = True)
-        np_likelihood_estimate_values[i] = likelihood
-    percentiles = np.percentile(np_likelihood_estimate_values, [10, 90])
-    anomaly_threshold = percentiles[0] / (percentiles[1] / percentiles[0])
-    print(np_likelihood_estimate_values)
+    # np_likelihood_estimate_values = np.zeros(xx.shape[0] - 1)
+    # for i in range(xx.shape[0]-1):
+    #     Xi = modelling.GaussRV(C = CovMat(final_residuals_covariance, kind ='full'), mu = xx[i])
+    #     #E = Xi.sample(dict_parameters["num particles"])
+    #     E = Xi.sample(25)
+    #     innovs = (yy[i] - HMM.Obs(E, 1)) @ HMM.Obs.noise.C.sym_sqrt_inv
+    #     w = reweight(np.ones(E.shape[0]), innovs=innovs)
+    #     #w = np.ones(E.shape[0])
+    #     E = HMM.Dyn(E, i, 1)
+    #     np_cov_mat = np.array(HMM.Obs.noise.C.full)
+    #     likelihood = 0
+    #     for j in range(E.shape[0]):
+    #         likelihood += (w[j]) * multivariate_normal.pdf(yy[i], mean=E[j], cov=np_cov_mat, allow_singular = True)
+    #     np_likelihood_estimate_values[i] = likelihood
+    # percentiles = np.percentile(np_likelihood_estimate_values, [10, 90])
+    # anomaly_threshold = percentiles[0] / (percentiles[1]/percentiles[0])
+    #anomaly_threshold = percentiles[1]
+    #anomaly_threshold = 1e-2
+    anomaly_threshold = 1e-20
     print("anomaly threshold", anomaly_threshold)
     #quit()
-
-    element_names = LIST_6_MEAN_ELEMENT_NAMES
-    if dict_shared_parameters["use 5 elements"]:
-        element_names = LIST_5_MEAN_ELEMENT_NAMES
 
     xp = da.PartFilt(N = dict_parameters["num particles"], reg = 1, NER = 1, qroot = 1, wroot = 1)
     if PLOT_MARGINALS:
         HMM.liveplotters = live_plots(plot_marginals = PLOT_MARGINALS,
                                       use_keplerian_coordinates = USE_KEPLERIAN_COORDINATES,
-                                      element_names=element_names)
+                                      element_names=DICT_ELEMENT_NAMES[dict_shared_parameters["element set"]])
         xp.assimilate(HMM, xx[:], yy[:], anomaly_threshold, INDICES_FOR_ANOMALY_DETECTION,
                       covariance_in_anomaly_dimensions, liveplots=True)
     else:

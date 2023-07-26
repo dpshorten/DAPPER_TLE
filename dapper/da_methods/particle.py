@@ -100,13 +100,13 @@ class PartFilt:
                 #print(full_likelihood, likelihood)
                 if full_likelihood < anomaly_threshold:
                     #if full_likelihood == 0:
-                    #    print("underflow")
-                    #print("\n*****resampling*****\n")
+                     #   print("underflow")
+                    print("\n*****resampling*****\n")
                     Xn = modelling.GaussRV(C=CovMat(HMM.Obs.noise.C.full, kind='full'), mu=yy[ko])
                     E = Xn.sample(N)
                     self.likelihoods[ko] = -likelihood
                 else:
-                    self.likelihoods[ko] = -1e9
+                    self.likelihoods[ko] = -likelihood
 
 
                 w = reweight(w, innovs=innovs)

@@ -28,26 +28,39 @@ def propagate_mean_elements(particle_index,
                             tle_line_pair_initial,
                             tle_line_pair_post,
                             normalisation_weights,
-                            use_keplerian_coordinates = True):
+                            np_propagation_corrections = np.empty(0),
+                            element_set = "kepler_6"):
 
     np_particle_mean_elements = np_mean_elements_of_particles[:, particle_index]
     np_particle_mean_elements = np.multiply(np_particle_mean_elements, normalisation_weights)
 
-    if not use_keplerian_coordinates:
-        np_particle_mean_elements = convert_np_cartesian_coordinates_to_keplerian(np_particle_mean_elements)
+    #print("prior", np_particle_mean_elements)
+    np_propagated_mean_elements = propagate_np_mean_elements(np_particle_mean_elements,
+                                                             tle_line_pair_initial,
+                                                             tle_line_pair_post,
+                                                             element_set=element_set)
 
-    np_propagated_mean_elements = propagate_np_mean_elements(np_particle_mean_elements, tle_line_pair_initial, tle_line_pair_post)
+    #print(np_propagation_corrections[particle_index, :])
+    #quit()
+    if np_propagation_corrections.shape[0] > 0:
+        np_propagated_mean_elements -= np_propagation_corrections[particle_index, :]
 
-    if use_keplerian_coordinates:
-        return np.divide(np_propagated_mean_elements, normalisation_weights)
-    else:
-        return np.divide(
-            convert_np_keplerian_coordinates_to_cartesian(np_propagated_mean_elements),
-            normalisation_weights
-        )
+    return np.divide(
+        np_propagated_mean_elements,
+        normalisation_weights
+    )
 
 @modelling.ens_compatible
-def step(x, t, dt, process_pool, satelliteTLEData_object, normalisation_weights, use_keplerian_coordinates = True):
+def step(x, t, dt, process_pool, satelliteTLEData_object, normalisation_weights, correction_model=None, element_set="kepler_6"):
+
+    if correction_model:
+        unnormalised_x = np.zeros((x.shape[1], x.shape[0]))
+        #print("shape", unnormalised_x.shape)
+        for j in range(x.shape[1]):
+            unnormalised_x[j, :] = np.multiply(x[:, j], normalisation_weights)
+        np_propagation_corrections = correction_model.predict(unnormalised_x)
+    else:
+        np_propagation_corrections = np.zeros((x.shape[1], x.shape[0]))
 
     propagated_particles = process_pool.map(
         partial(propagate_mean_elements,
@@ -55,7 +68,8 @@ def step(x, t, dt, process_pool, satelliteTLEData_object, normalisation_weights,
                 tle_line_pair_initial = satelliteTLEData_object.list_of_tle_line_tuples[t],
                 tle_line_pair_post = satelliteTLEData_object.list_of_tle_line_tuples[t+dt],
                 normalisation_weights = normalisation_weights,
-                use_keplerian_coordinates = use_keplerian_coordinates
+                np_propagation_corrections = np_propagation_corrections,
+                element_set = element_set
                 ),
         range(0, x.shape[1])
     )
@@ -68,16 +82,11 @@ def live_plots(plot_marginals = False, use_keplerian_coordinates = True, params 
     Sets up the live plotting functionality for Dapper.
     """
 
-    if use_keplerian_coordinates:
-        labels = element_names
-    else:
-        labels = ["x", "y", "z", "v_x", "v_y", "v_z"]
-
     if plot_marginals:
         return [(1, LP.sliding_marginals(obs_inds=tuple(np.arange(10)),
                                          zoomy = 0.75,
                                          ens_props = dict(alpha = 0.1),
-                                         labels = labels,
+                                         labels = element_names,
                                          **params)),]
     else:
         return []

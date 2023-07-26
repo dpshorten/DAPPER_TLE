@@ -436,7 +436,7 @@ class sliding_diagnostics:
             update_plot_data(ax, lines)
 
         # Set x-limits (time)
-        sliding_xlim(ax0, self.d[0]['err.rms']['tt'], self.T_lag, margin=True)
+        #sliding_xlim(ax0, self.d[0]['err.rms']['tt'], self.T_lag, margin=True)
         self.baseline0.set_xdata(ax0.get_xlim())
 
         # Set y-limits
