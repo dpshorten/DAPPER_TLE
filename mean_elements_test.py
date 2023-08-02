@@ -29,61 +29,20 @@ USE_KEPLERIAN_COORDINATES = False
 # Plotting the sliding marginal time series slows things down a lot, so it's useful to be able to turn it off
 PLOT_MARGINALS = False
 
-INDICES_FOR_ANOMALY_DETECTION = [0, 4, 5]
+INDICES_FOR_ANOMALY_DETECTION = [4]
 
 def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parameters, dict_parameters, satellite_index):
-
-    print("assimilating:", dict_shared_parameters["satellite names list"][satellite_index])
 
     process_pool = multiprocessing.Pool(dict_parameters["dapper n jobs"])
 
     # Estimate both the model and observation uncertainty as the covariance of the residuals when propagating the TLEs from
     # one epoch to the subsequent epoch. There's probably a better way of doing this, but using this for now.
     pd_df_propagated_mean_elements = propagate_SatelliteTLEData_object(satelliteTLEData_satellites, 1)
-    #print(satelliteTLEData_satellites.pd_df_tle_data)
-    #print(pd_df_propagated_mean_elements)
-    #quit()
     pd_df_residuals = (pd_df_propagated_mean_elements - satelliteTLEData_satellites.pd_df_tle_data).dropna()
-
-    print(satelliteTLEData_satellites.pd_df_tle_data)
-
-    list_X = []
-    list_y = []
-    #for sat_name in dict_shared_parameters["all sats"]:
-    for sat_name in [dict_shared_parameters["satellite names list"][satellite_index]]:
-
-        satelliteTLEData_temp = load_tle_data_from_file(dict_shared_parameters["data files directory"] +
-                                                              sat_name +
-                                                              dict_shared_parameters["tle file suffix"],
-                                                              dict_shared_parameters["start epoch"],
-                                                              dict_shared_parameters["element set"])
-        pd_df_propagated_elements_temp = propagate_SatelliteTLEData_object(satelliteTLEData_temp, 1)
-        pd_df_residuals_temp = (pd_df_propagated_elements_temp - satelliteTLEData_temp.pd_df_tle_data).dropna()
-        #time_deltas = (satelliteTLEData_temp.pd_df_tle_data.index.values[1:] -
-         #              satelliteTLEData_temp.pd_df_tle_data.index.values[:-1]) / np.timedelta64(1, 's')
-        satelliteTLEData_temp.pd_df_tle_data = satelliteTLEData_temp.pd_df_tle_data.iloc[:-1]
-
-        #satelliteTLEData_temp.pd_df_tle_data["time deltas"] = time_deltas
-        satelliteTLEData_temp.pd_df_tle_data = satelliteTLEData_temp.pd_df_tle_data.reset_index(drop = True)
-        pd_df_residuals_temp = pd_df_residuals_temp.reset_index(drop = True)
-        list_X.append(satelliteTLEData_temp.pd_df_tle_data)
-        list_y.append(pd_df_residuals_temp)
-
-    pd_df_X = pd.concat(list_X)
-    pd_df_y = pd.concat(list_y)
-    print(pd_df_X.shape)
-    correction_model = XGBRegressor(max_depth = 10, n_estimators = 100, learning_rate = 0.2)
-    correction_model.fit(pd_df_X, pd_df_y)
-    np_correction_model_predictions = correction_model.predict(pd_df_X)
-    model_errors = np.abs(pd_df_y.values - np_correction_model_predictions)
-    print(np.mean(model_errors, axis=0))
-    print(np.mean(np.abs(pd_df_y.values), axis=0))
-    #print(preds[0, :])
-    #print(pd_df_residuals.iloc[0, :])
-    #quit()
+    correction_model = None
 
     # Remove outliers for covariance estimation
-    pd_df_residuals -= np_correction_model_predictions
+    #pd_df_residuals -= np_correction_model_predictions
     q1 = pd_df_residuals.quantile(0.1)
     q3 = pd_df_residuals.quantile(0.9)
     iqr = q3 - q1
@@ -91,13 +50,20 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parame
     np_residuals = pd_df_residuals.values
     np_residuals = np.concatenate((np_residuals, -np_residuals))
     initial_residuals_covariance = np.cov(np_residuals, rowvar = False)
-    print(initial_residuals_covariance)
     normalisation_weights = np.sqrt(np.diag(initial_residuals_covariance))
     #normalisation_weights = np.ones(initial_residuals_covariance.shape[0])
     #normalisation_weights = [1]
     final_residuals_covariance = np.cov(np.divide(pd_df_residuals.values, normalisation_weights), rowvar = False)
-    #final_residuals_covariance[1, 3] = 0 * np.sqrt(final_residuals_covariance[1,1]) * np.sqrt(final_residuals_covariance[3,3])
-    #final_residuals_covariance[3, 1] = 0 * np.sqrt(final_residuals_covariance[1,1]) * np.sqrt(final_residuals_covariance[3,3])
+    final_residuals_covariance[1, 3] = 0. * np.sqrt(final_residuals_covariance[1, 1]) * np.sqrt(final_residuals_covariance[3, 3])
+    final_residuals_covariance[3, 1] = 0. * np.sqrt(final_residuals_covariance[1, 1]) * np.sqrt(final_residuals_covariance[3, 3])
+
+    propagation_covariance = np.copy(final_residuals_covariance)
+    propagation_covariance[3, 3] *= 2
+    propagation_covariance[1, 1] *= 2
+    propagation_covariance[1, 3] = -1 * np.sqrt(final_residuals_covariance[1, 1]) * np.sqrt(
+        final_residuals_covariance[3, 3])
+    propagation_covariance[3, 1] = -1 * np.sqrt(final_residuals_covariance[1,1]) * np.sqrt(final_residuals_covariance[3,3])
+    print(propagation_covariance)
 
     covariance_in_anomaly_dimensions = np.zeros((len(INDICES_FOR_ANOMALY_DETECTION), len(INDICES_FOR_ANOMALY_DETECTION)))
     for index_1 in range(len(INDICES_FOR_ANOMALY_DETECTION)):
@@ -110,6 +76,7 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parame
     # Print out the eigenvalues of this covariance matrix, as this is what is leading to the Dapper error:
     # 'Rank-deficient R not supported.'
     print("eigenvalues of residuals covariance", sla.eigh(final_residuals_covariance)[0])
+    print("eigenvalues of propagation covariance", sla.eigh(propagation_covariance)[0])
 
     xx = np.divide(
         get_np_mean_elements_from_satelliteTLEData_object(satelliteTLEData_satellites,
@@ -137,7 +104,7 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parame
                          #correction_model=None,
                          element_set=dict_shared_parameters["element set"],
                          ),
-        'noise': modelling.GaussRV(C = CovMat(final_residuals_covariance, kind ='full')),
+        'noise': modelling.GaussRV(C = CovMat(propagation_covariance, kind ='full')),
         #'noise': modelling.GaussRV(C=CovMat(0*residuals_covariance, kind='full')),
     }
 
@@ -188,4 +155,4 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parame
 dict_shared_parameters = yaml.safe_load(open(sys.argv[1], 'r'))
 dict_parameters = yaml.safe_load(open(sys.argv[2], 'r'))
 
-run_a_method_on_satellites(assimilate_for_one_satellite, dict_shared_parameters, dict_parameters)
+run_a_method_on_satellites(assimilate_for_one_satellite, dict_shared_parameters, dict_parameters, "../")

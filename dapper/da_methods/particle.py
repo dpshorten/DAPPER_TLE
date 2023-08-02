@@ -68,7 +68,9 @@ class PartFilt:
             E = HMM.Dyn(E, t-dt, dt)
             if HMM.Dyn.noise.C != 0:
                 D  = rnd.randn(N, Nx)
-                E += np.sqrt(dt*self.qroot)*(D@HMM.Dyn.noise.C.Right)
+                #E += np.sqrt(dt*self.qroot)*(D@HMM.Dyn.noise.C.Right)
+
+                E += np.random.multivariate_normal(mean = np.zeros(6), cov = np.array(HMM.Dyn.noise.C.full), size = len(E))
 
                 if self.qroot != 1.0:
                     # Evaluate p/q (for each col of D) when q:=p**(1/self.qroot).
@@ -97,17 +99,15 @@ class PartFilt:
                                                                             cov=covariance_for_anomaly_detection,
                                                                             allow_singular = True)
                     full_likelihood += w[i] * multivariate_normal.pdf(yy[ko], mean=E[i], cov=cov, allow_singular = True)
-                #print(full_likelihood, likelihood)
+                #print(ko, full_likelihood, likelihood)
                 if full_likelihood < anomaly_threshold:
                     #if full_likelihood == 0:
                      #   print("underflow")
                     print("\n*****resampling*****\n")
                     Xn = modelling.GaussRV(C=CovMat(HMM.Obs.noise.C.full, kind='full'), mu=yy[ko])
                     E = Xn.sample(N)
-                    self.likelihoods[ko] = -likelihood
-                else:
-                    self.likelihoods[ko] = -likelihood
 
+                self.likelihoods[ko] = -full_likelihood
 
                 w = reweight(w, innovs=innovs)
 
