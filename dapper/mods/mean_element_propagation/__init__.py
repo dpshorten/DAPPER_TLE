@@ -87,7 +87,6 @@ def live_plots(plot_marginals = False, use_keplerian_coordinates = True, params 
                                          zoomy = 0.75,
                                          ens_props = dict(alpha = 0.1),
                                          labels = element_names,
-                                         **params)),
-                (2, LP.phase_particles())]
+                                         **params)),]
     else:
         return []

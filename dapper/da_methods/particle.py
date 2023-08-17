@@ -140,6 +140,7 @@ class OptPF:
         N, Nx, R = self.N, HMM.Dyn.M, HMM.Obs.noise.C.full
 
         self.likelihoods = np.zeros(HMM.tseq.Ko + 1)
+        self.particle_positions = np.zeros((HMM.tseq.Ko + 1, N, Nx))
 
         E = HMM.X0.sample(N)
         w = 1/N*np.ones(N)
@@ -162,6 +163,7 @@ class OptPF:
                                                                  allow_singular=True)
                 #print(ko, likelihood)
                 self.likelihoods[ko] = -likelihood
+
 
                 self.stats.assess(k, ko, 'f', E=E, w=w)
                 y = yy[ko]
@@ -190,6 +192,8 @@ class OptPF:
                     C12     = self.reg*auto_bandw(N, Nx)*raw_C12(E, w)
                     idx, w  = resample(w, self.resampl, wroot=self.wroot)
                     E, _    = regularize(C12, E, idx, self.nuj)
+
+                self.particle_positions[ko, :, :] = E
 
             self.stats.assess(k, ko, 'u', E=E, w=w)
 

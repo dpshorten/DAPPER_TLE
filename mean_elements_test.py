@@ -13,6 +13,7 @@ import multiprocessing
 import yaml
 from scipy.stats import multivariate_normal
 from TLE_utilities.evaluation import run_a_method_on_satellites
+import pickle
 
 from xgboost import XGBRegressor
 from sklearn.model_selection import RepeatedKFold, cross_val_score
@@ -25,9 +26,9 @@ from tle_loading_and_preprocessing import (propagate_SatelliteTLEData_object,
                                                          load_tle_data_from_file,
                                                          DICT_ELEMENT_NAMES)
 # If set to False, Cartesian coordinates will be used
-USE_KEPLERIAN_COORDINATES = False
+USE_KEPLERIAN_COORDINATES = True
 # Plotting the sliding marginal time series slows things down a lot, so it's useful to be able to turn it off
-PLOT_MARGINALS = True
+PLOT_MARGINALS = False
 
 INDICES_FOR_ANOMALY_DETECTION = [4]
 
@@ -37,6 +38,8 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parame
 
     # Estimate both the model and observation uncertainty as the covariance of the residuals when propagating the TLEs from
     # one epoch to the subsequent epoch. There's probably a better way of doing this, but using this for now.
+    #print(satelliteTLEData_satellites.pd_df_tle_data)
+    #quit()
     pd_df_propagated_mean_elements = propagate_SatelliteTLEData_object(satelliteTLEData_satellites, 1)
     pd_df_residuals = (pd_df_propagated_mean_elements - satelliteTLEData_satellites.pd_df_tle_data).dropna()
     correction_model = None
@@ -50,8 +53,8 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parame
     np_residuals = pd_df_residuals.values
     np_residuals = np.concatenate((np_residuals, -np_residuals))
     initial_residuals_covariance = np.cov(np_residuals, rowvar = False)
-    normalisation_weights = np.sqrt(np.diag(initial_residuals_covariance))
-    #normalisation_weights = np.ones(initial_residuals_covariance.shape[0])
+    #normalisation_weights = np.sqrt(np.diag(initial_residuals_covariance))
+    normalisation_weights = np.ones(initial_residuals_covariance.shape[0])
     #normalisation_weights = [1]
     final_residuals_covariance = np.cov(np.divide(pd_df_residuals.values, normalisation_weights), rowvar = False)
     final_residuals_covariance[1, 3] = 0. * np.sqrt(final_residuals_covariance[1, 1]) * np.sqrt(final_residuals_covariance[3, 3])
@@ -153,6 +156,13 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parame
     pd_df_results = satelliteTLEData_satellites.pd_df_tle_data.iloc[1:]
     pd_df_results.loc[:, dict_shared_parameters["detection column name"]] = xp.likelihoods
     pd_df_results = pd_df_results[[dict_shared_parameters["detection column name"]]]
+    pickle.dump(xp.particle_positions, open(dict_parameters["filter logs directory"] +
+                                            dict_shared_parameters["satellite names list"][satellite_index] +
+                                            dict_parameters["particle positions log suffix"], "wb"))
+    pickle.dump(satelliteTLEData_satellites, open(dict_parameters["filter logs directory"] +
+                                            dict_shared_parameters["satellite names list"][satellite_index] +
+                                            dict_parameters["satellites log suffix"], "wb"))
+    quit()
     return pd_df_results
 
 dict_shared_parameters = yaml.safe_load(open(sys.argv[1], 'r'))
