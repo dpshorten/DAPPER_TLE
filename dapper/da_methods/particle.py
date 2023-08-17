@@ -54,7 +54,7 @@ class PartFilt:
     # if miN < 1:
     # miN = N*miN
 
-    def assimilate(self, HMM, xx, yy, anomaly_threshold, indices_for_anomaly_detection, covariance_for_anomaly_detection):
+    def assimilate(self, HMM, xx, yy, anomaly_threshold):
         N, Nx, Rm12 = self.N, HMM.Dyn.M, HMM.Obs.noise.C.sym_sqrt_inv
 
         self.likelihoods = np.zeros(HMM.tseq.Ko + 1)
@@ -94,10 +94,6 @@ class PartFilt:
                 full_likelihood = 0
                 for i in range(E.shape[0]):
                     #print(diag)
-                    likelihood += w[i] * multivariate_normal.pdf(yy[ko][indices_for_anomaly_detection],
-                                                                            mean=E[i][indices_for_anomaly_detection],
-                                                                            cov=covariance_for_anomaly_detection,
-                                                                            allow_singular = True)
                     full_likelihood += w[i] * multivariate_normal.pdf(yy[ko], mean=E[i], cov=cov, allow_singular = True)
                 #print(ko, full_likelihood, likelihood)
                 if full_likelihood < anomaly_threshold:
@@ -140,8 +136,10 @@ class OptPF:
     nuj: bool    = True
     wroot: float = 1.0
 
-    def assimilate(self, HMM, xx, yy):
+    def assimilate(self, HMM, xx, yy, restart_threshold):
         N, Nx, R = self.N, HMM.Dyn.M, HMM.Obs.noise.C.full
+
+        self.likelihoods = np.zeros(HMM.tseq.Ko + 1)
 
         E = HMM.X0.sample(N)
         w = 1/N*np.ones(N)
@@ -154,6 +152,17 @@ class OptPF:
                 E += np.sqrt(dt)*(rnd.randn(N, Nx)@HMM.Dyn.noise.C.Right)
 
             if ko is not None:
+
+                likelihood = 0
+                for i in range(E.shape[0]):
+                    # print(diag)
+                    likelihood += w[i] * multivariate_normal.pdf(yy[ko],
+                                                                 mean=E[i],
+                                                                 cov=HMM.Obs.noise.C.full,
+                                                                 allow_singular=True)
+                #print(ko, likelihood)
+                self.likelihoods[ko] = -likelihood
+
                 self.stats.assess(k, ko, 'f', E=E, w=w)
                 y = yy[ko]
 

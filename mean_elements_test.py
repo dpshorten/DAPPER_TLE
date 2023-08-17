@@ -27,7 +27,7 @@ from tle_loading_and_preprocessing import (propagate_SatelliteTLEData_object,
 # If set to False, Cartesian coordinates will be used
 USE_KEPLERIAN_COORDINATES = False
 # Plotting the sliding marginal time series slows things down a lot, so it's useful to be able to turn it off
-PLOT_MARGINALS = False
+PLOT_MARGINALS = True
 
 INDICES_FOR_ANOMALY_DETECTION = [4]
 
@@ -58,8 +58,8 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parame
     final_residuals_covariance[3, 1] = 0. * np.sqrt(final_residuals_covariance[1, 1]) * np.sqrt(final_residuals_covariance[3, 3])
 
     propagation_covariance = np.copy(final_residuals_covariance)
-    propagation_covariance[3, 3] *= 2
-    propagation_covariance[1, 1] *= 2
+    propagation_covariance[3, 3] *= 5
+    propagation_covariance[1, 1] *= 5
     propagation_covariance[1, 3] = -1 * np.sqrt(final_residuals_covariance[1, 1]) * np.sqrt(
         final_residuals_covariance[3, 3])
     propagation_covariance[3, 1] = -1 * np.sqrt(final_residuals_covariance[1,1]) * np.sqrt(final_residuals_covariance[3,3])
@@ -137,15 +137,18 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites, dict_shared_parame
     print("anomaly threshold", anomaly_threshold)
     #quit()
 
-    xp = da.PartFilt(N = dict_parameters["num particles"], reg = 1, NER = 1, qroot = 1, wroot = 1)
+    #xp = da.PartFilt(N = dict_parameters["num particles"], reg = 1, NER = 1, qroot = 1, wroot = 1)
+    xp = da.OptPF(N=dict_parameters["num particles"], reg=1, NER=1, Qs=1, wroot=1)
     if PLOT_MARGINALS:
         HMM.liveplotters = live_plots(plot_marginals = PLOT_MARGINALS,
                                       use_keplerian_coordinates = USE_KEPLERIAN_COORDINATES,
                                       element_names=DICT_ELEMENT_NAMES[dict_shared_parameters["element set"]])
-        xp.assimilate(HMM, xx[:], yy[:], anomaly_threshold, INDICES_FOR_ANOMALY_DETECTION,
-                      covariance_in_anomaly_dimensions, liveplots=True)
+        #xp.assimilate(HMM, xx[:], yy[:], anomaly_threshold, INDICES_FOR_ANOMALY_DETECTION,
+         #             covariance_in_anomaly_dimensions, liveplots=True)
+        xp.assimilate(HMM, xx[:], yy[:], anomaly_threshold, liveplots = True)
     else:
-        xp.assimilate(HMM, xx[:], yy[:], anomaly_threshold, INDICES_FOR_ANOMALY_DETECTION, covariance_in_anomaly_dimensions)
+        #xp.assimilate(HMM, xx[:], yy[:], anomaly_threshold, INDICES_FOR_ANOMALY_DETECTION, covariance_in_anomaly_dimensions)
+        xp.assimilate(HMM, xx[:], yy[:], anomaly_threshold)
 
     pd_df_results = satelliteTLEData_satellites.pd_df_tle_data.iloc[1:]
     pd_df_results.loc[:, dict_shared_parameters["detection column name"]] = xp.likelihoods
