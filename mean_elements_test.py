@@ -27,7 +27,7 @@ from tle_loading_and_preprocessing import (propagate_SatelliteTLEData_object,
 # If set to False, Cartesian coordinates will be used
 USE_KEPLERIAN_COORDINATES = True
 # Plotting the sliding marginal time series slows things down a lot, so it's useful to be able to turn it off
-PLOT_MARGINALS = False
+PLOT_MARGINALS = True
 
 #INDICES_FOR_ANOMALY_DETECTION = [4]
 
@@ -41,7 +41,9 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
 
     # Estimate both the model and observation uncertainty as the covariance of the residuals when propagating the TLEs from
     # one epoch to the subsequent epoch. There's probably a better way of doing this, but using this for now.
+    print(satelliteTLEData_satellites.pd_df_tle_data)
     pd_df_propagated_mean_elements = propagate_SatelliteTLEData_object(satelliteTLEData_satellites, 1)
+    print(pd_df_propagated_mean_elements)
     pd_df_residuals = (pd_df_propagated_mean_elements - satelliteTLEData_satellites.pd_df_tle_data).dropna()
 
     initial_residuals_covariance = MinCovDet(assume_centered=True).fit(pd_df_residuals.values).covariance_
