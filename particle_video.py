@@ -9,48 +9,70 @@ sys.path.insert(0, base_package_load_path)
 sys.path.insert(0, base_package_load_path + "/TLE_utilities")
 from tle_loading_and_preprocessing import convert_np_keplerian_coordinates_to_cartesian, propagate_np_mean_elements
 
-PATH_LENGTH = 20
-def random_walk(num_steps, max_step=0.05):
-    """Return a 3D random walk as (num_steps, 3) array."""
-    start_pos = np.random.random(3)
-    steps = np.random.uniform(-max_step, max_step, size=(num_steps, 3))
-    walk = start_pos + np.cumsum(steps, axis=0)
-    return walk
+PATH_LENGTH = 18
 
-def update_lines(num, walks, lines, heads):
-    for line, walk, head in zip(lines, walks, heads):
+def update_plot(num,
+                particle_positions,
+                particle_traces,
+                particle_heads,
+                satellite_positions,
+                satellite_trace,
+                satellite_head,
+                ):
+    path_length = min(num, PATH_LENGTH)
+    satellite_trace.set_data(satellite_positions[(num - path_length):num, :2].T)
+    satellite_trace.set_3d_properties(satellite_positions[(num - path_length):num, 2].T)
+    satellite_head.set_data(satellite_positions[(num - 1), :2].T)
+    satellite_head.set_3d_properties(satellite_positions[(num - 1), 2].T)
+    for particle_trace, particle_position, particle_head in \
+            zip(particle_traces, particle_positions, particle_heads):
         # NOTE: there is no .set_data() for 3 dim data...
-        path_length = min(num, PATH_LENGTH)
-        line.set_data(walk[(num - path_length):num, :2].T)
-        line.set_3d_properties(walk[(num - path_length):num, 2])
-        head.set_data(walk[(num-1), :2].T)
-        head.set_3d_properties(walk[(num-1), 2])
-    return lines
+        particle_trace.set_data(particle_position[(num - path_length):num, :2].T)
+        particle_trace.set_3d_properties(particle_position[(num - path_length):num, 2])
+        particle_head.set_data(particle_position[(num-1), :2].T)
+        particle_head.set_3d_properties(particle_position[(num-1), 2])
+    return particle_traces
 
 # Data: 40 random walks as (num_steps, 3) arrays
 EPOCHS = 10
-INFLATION_FACTOR = 25
+INFLATION_FACTOR = 100
 num_steps = EPOCHS * INFLATION_FACTOR
-positions = pickle.load(open("filter_logs/Fengyun-2D_particle_positions.pkl", "rb"))
-satelliteTLEData_satellites = pickle.load(open("filter_logs/Fengyun-2D_satellites.pkl", "rb"))
+particle_positions = pickle.load(open("filter_logs/Gosat-2_particle_positions.pkl", "rb"))
+satelliteTLEData_satellites = pickle.load(open("filter_logs/Gosat-2_satellites.pkl", "rb"))
 
-print(positions[0, :3, :])
+print(particle_positions[0, :3, :])
+perturbations = np.zeros((particle_positions.shape[1], 6))
+for j in range(perturbations.shape[0]):
+    perturbations[j, 0] = 1e-1 * np.random.random()
+    perturbations[j, 2] = 1e-1 * np.random.random()
 
-cartesian_positions = np.zeros((INFLATION_FACTOR * EPOCHS, positions.shape[1], 3))
+particle_cartesian_positions = np.zeros((INFLATION_FACTOR * EPOCHS, particle_positions.shape[1], 3))
+satellite_cartesian_positions = np.zeros((INFLATION_FACTOR * EPOCHS, 3))
 #for i in range(0, positions.shape[0] - 2):
 for i in range(0, EPOCHS):
-    for j in range(0, positions.shape[1]):
-        cartesian_positions[INFLATION_FACTOR * i, j, :] = convert_np_keplerian_coordinates_to_cartesian(
-            positions[i, j, :])[:3]
+    satellite_cartesian_positions[INFLATION_FACTOR * i, :] = convert_np_keplerian_coordinates_to_cartesian(
+        satelliteTLEData_satellites.pd_df_tle_data.values[i, :])[:3]
+    for k in range(INFLATION_FACTOR - 1):
+        next_satellite_pos = propagate_np_mean_elements(satelliteTLEData_satellites.pd_df_tle_data.values[i + 1, :],
+                                                    satelliteTLEData_satellites.list_of_tle_line_tuples[i + 1],
+                                                    satelliteTLEData_satellites.list_of_tle_line_tuples[i + 2],
+                                                    proportion=(k + 1) / INFLATION_FACTOR)
+        satellite_cartesian_positions[INFLATION_FACTOR * i + k + 1, :] = (
+            convert_np_keplerian_coordinates_to_cartesian(next_satellite_pos)[:3])
+    for j in range(0, particle_positions.shape[1]):
+        particle_cartesian_positions[INFLATION_FACTOR * i, j, :] = convert_np_keplerian_coordinates_to_cartesian(
+            particle_positions[i, j, :] + perturbations[j])[:3]
         for k in range(INFLATION_FACTOR - 1):
-            next_pos = propagate_np_mean_elements(positions[i, j, :],
-                                              satelliteTLEData_satellites.list_of_tle_line_tuples[i + 1],
-                                              satelliteTLEData_satellites.list_of_tle_line_tuples[i + 2],
-                                              proportion = (k + 1)/INFLATION_FACTOR)
-            cartesian_positions[INFLATION_FACTOR * i + k + 1, j, :] = convert_np_keplerian_coordinates_to_cartesian(next_pos)[:3]
+            next_pos = propagate_np_mean_elements(particle_positions[i, j, :],
+                                                  satelliteTLEData_satellites.list_of_tle_line_tuples[i + 1],
+                                                  satelliteTLEData_satellites.list_of_tle_line_tuples[i + 2],
+                                                  proportion = (k + 1)/INFLATION_FACTOR)
+            particle_cartesian_positions[INFLATION_FACTOR * i + k + 1, j, :] = (
+                convert_np_keplerian_coordinates_to_cartesian(next_pos + perturbations[j])[:3])
 
-walks = [cartesian_positions[:, index, :] for index in range(20)]
-print(walks[0])
+reshaped_cartesian_particle_positions = [particle_cartesian_positions[:, index, :] for index in range(20)]
+#reshaped_cartesian_satellite_positions = [satellite_cartesian_positions[index, :] for index in range(20)]
+print(reshaped_cartesian_particle_positions[0])
 
 # Attaching 3D axis to the figure
 plt.style.use('dark_background')
@@ -59,8 +81,11 @@ ax = fig.add_subplot(projection="3d")
 ax._axis3don = False
 
 # Create lines initially without data
-lines = [ax.plot([], [], [], alpha = 0.5)[0] for _ in walks]
-heads = [ax.plot([], [], [], '.')[0] for _ in walks]
+particle_traces = [ax.plot([], [], [], alpha = 0.5)[0] for _ in reshaped_cartesian_particle_positions]
+particle_heads = [ax.plot([], [], [], '.')[0] for _ in reshaped_cartesian_particle_positions]
+
+satellite_trace = ax.plot([], [], [], alpha = 0.75, color = 'red')[0]
+satellite_head = ax.plot([], [], [], '.', markersize = 20, color = 'red')[0]
 
 # Setting the axes properties
 ax.set(xlim3d=(-1e8, 1e8), xlabel='X')
@@ -69,6 +94,12 @@ ax.set(zlim3d=(-1e8, 1e8), zlabel='Z')
 
 # Creating the Animation object
 ani = animation.FuncAnimation(
-    fig, update_lines, num_steps, fargs=(walks, lines, heads), interval=100)
+    fig, update_plot, num_steps, fargs=(reshaped_cartesian_particle_positions,
+                                        particle_traces,
+                                        particle_heads,
+                                        satellite_cartesian_positions,
+                                        satellite_trace,
+                                        satellite_head,
+                                        ), interval=100)
 
 plt.show()

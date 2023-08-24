@@ -1,5 +1,5 @@
 dapper n jobs: 12
-num particles: 20
+num particles: 200
 
 method name: "filter"
 method variant: "bootstrap"

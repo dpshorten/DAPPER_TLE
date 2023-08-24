@@ -58,6 +58,7 @@ class PartFilt:
         N, Nx, Rm12 = self.N, HMM.Dyn.M, HMM.Obs.noise.C.sym_sqrt_inv
 
         self.likelihoods = np.zeros(HMM.tseq.Ko + 1)
+        self.particle_positions = np.zeros((HMM.tseq.Ko + 1, N, Nx))
 
         E = HMM.X0.sample(N)
         w = 1/N*np.ones(N)
@@ -116,9 +117,20 @@ class PartFilt:
                     #     # Compensate for rroot
                     #     w *= np.exp(-0.5*chi2*(1 - 1/rroot))
                     #     w /= w.sum()
+
+                self.particle_positions[ko, :, :] = E
+
             self.stats.assess(k, ko, 'u', E=E, w=w)
 
-
+def compute_likelihood(E, w, new_y, HMM):
+    likelihood = 0
+    for i in range(E.shape[0]):
+        # print(diag)
+        likelihood += w[i] * multivariate_normal.pdf(new_y,
+                                                     mean=E[i],
+                                                     cov=HMM.Obs.noise.C.full,
+                                                     allow_singular=True)
+    return likelihood
 @particle_method
 class OptPF:
     """'Optimal proposal' particle filter, also known as 'Implicit particle filter'.
@@ -153,18 +165,31 @@ class OptPF:
                 E += np.sqrt(dt)*(rnd.randn(N, Nx)@HMM.Dyn.noise.C.Right)
 
             if ko is not None:
-
-                likelihood = 0
-                for i in range(E.shape[0]):
-                    # print(diag)
-                    likelihood += w[i] * multivariate_normal.pdf(yy[ko],
-                                                                 mean=E[i],
-                                                                 cov=HMM.Obs.noise.C.full,
-                                                                 allow_singular=True)
                 #print(ko, likelihood)
-                self.likelihoods[ko] = -likelihood
 
+                observation_likelihood = compute_likelihood(E, w, yy[ko], HMM)
 
+                # cumulative_w = np.cumsum(w)
+                # n_samples = 100
+                # s_a = 0
+                # for i in range(n_samples):
+                #     place = np.random.random()
+                #     index = np.searchsorted(cumulative_w, place)
+                #     sample = multivariate_normal.rvs(mean=E[index],
+                #                                      cov=HMM.Obs.noise.C.full)
+                #     # print(index)
+                #     # print(w[index])
+                #     # print(sample)
+                #     # print(E[index])
+                #     # print(yy[ko])
+                #     sample_likelihood = compute_likelihood(E, w, sample, HMM)
+                #     #print(sample_likelihood, observation_likelihood)
+                #     if sample_likelihood < observation_likelihood:
+                #         s_a += 1
+                # s_a /= n_samples
+                # print("anomaly satistic:", s_a)
+
+                self.likelihoods[ko] = - observation_likelihood
                 self.stats.assess(k, ko, 'f', E=E, w=w)
                 y = yy[ko]
 
