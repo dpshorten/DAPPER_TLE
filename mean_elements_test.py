@@ -41,12 +41,10 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
 
     # Estimate both the model and observation uncertainty as the covariance of the residuals when propagating the TLEs from
     # one epoch to the subsequent epoch. There's probably a better way of doing this, but using this for now.
-    print(satelliteTLEData_satellites.pd_df_tle_data)
     pd_df_propagated_mean_elements = propagate_SatelliteTLEData_object(satelliteTLEData_satellites, 1)
-    print(pd_df_propagated_mean_elements)
     pd_df_residuals = (pd_df_propagated_mean_elements - satelliteTLEData_satellites.pd_df_tle_data).dropna()
 
-    initial_residuals_covariance = MinCovDet(assume_centered=True).fit(pd_df_residuals.values).covariance_
+    #initial_residuals_covariance = MinCovDet(assume_centered=True).fit(pd_df_residuals.values).covariance_
     #normalisation_weights = np.sqrt(np.diag(initial_residuals_covariance))
     normalisation_weights = np.ones(6)
     final_residuals_covariance = MinCovDet(assume_centered=True).fit(np.divide(pd_df_residuals.values, normalisation_weights)).covariance_
@@ -54,14 +52,9 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
     propagation_covariance = np.copy(final_residuals_covariance)
     propagation_covariance[3, 3] *= 1
     propagation_covariance[1, 1] *= 1
-    propagation_covariance[1, 3] = -0.999 * np.sqrt(final_residuals_covariance[1, 1]) * np.sqrt(final_residuals_covariance[3, 3])
-    propagation_covariance[3, 1] = -0.999 * np.sqrt(final_residuals_covariance[1,1]) * np.sqrt(final_residuals_covariance[3,3])
 
-    # covariance_in_anomaly_dimensions = np.zeros((len(INDICES_FOR_ANOMALY_DETECTION), len(INDICES_FOR_ANOMALY_DETECTION)))
-    # for index_1 in range(len(INDICES_FOR_ANOMALY_DETECTION)):
-    #     for index_2 in range(len(INDICES_FOR_ANOMALY_DETECTION)):
-    #         covariance_in_anomaly_dimensions[index_1, index_2] = final_residuals_covariance[INDICES_FOR_ANOMALY_DETECTION[index_1],
-    #                                                                                         INDICES_FOR_ANOMALY_DETECTION[index_2]]
+    #propagation_covariance[1, 3] = -0.9 * np.sqrt(final_residuals_covariance[1, 1]) * np.sqrt(final_residuals_covariance[3, 3])
+    #propagation_covariance[3, 1] = -0.9 * np.sqrt(final_residuals_covariance[1,1]) * np.sqrt(final_residuals_covariance[3,3])
 
     # Print out the eigenvalues of this covariance matrix, as this is what is leading to the Dapper error:
     # 'Rank-deficient R not supported.'
@@ -104,10 +97,9 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
 
     anomaly_threshold = 1e-20
     print("anomaly threshold", anomaly_threshold)
-    #quit()
 
-    xp = da.PartFilt(N = dict_parameters["num particles"], reg = 1, NER = 1, qroot = 1, wroot = 1)
-    #xp = da.OptPF(N=dict_parameters["num particles"], reg=1, NER=0.2, Qs=1, wroot=1)
+    #xp = da.PartFilt(N = dict_parameters["num particles"], reg = 1, NER = 0.5, qroot = 1, wroot = 1)
+    xp = da.OptPF(N=dict_parameters["num particles"], reg=1, NER=0.2, Qs=1, wroot=1)
     if PLOT_MARGINALS:
         HMM.liveplotters = live_plots(plot_marginals = PLOT_MARGINALS,
                                       use_keplerian_coordinates = USE_KEPLERIAN_COORDINATES,
@@ -119,6 +111,8 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
     pd_df_results = satelliteTLEData_satellites.pd_df_tle_data.iloc[1:]
     pd_df_results.loc[:, dict_shared_parameters["detection column name"]] = xp.likelihoods
     pd_df_results = pd_df_results[[dict_shared_parameters["detection column name"]]]
+
+    # Saving for the purpose of animation creation
     pickle.dump(xp.particle_positions, open(dict_parameters["filter logs directory"] +
                                             satellite_names_list[satellite_index] +
                                             dict_parameters["particle positions log suffix"], "wb"))

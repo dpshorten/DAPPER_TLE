@@ -1,8 +1,8 @@
 dapper n jobs: 12
-num particles: 200
+num particles: 250
 
 method name: "filter"
-method variant: "bootstrap"
+method variant: "OP"
 detection results save suffix: "detections.pkl"
 method base directory: "/home/david/Projects/DAPPER_TLE/"
 detection results save directory: "./detection_results/"

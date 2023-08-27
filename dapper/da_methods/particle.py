@@ -11,6 +11,7 @@ import dapper.mods as modelling
 from dapper.tools.matrices import CovMat
 
 from scipy.stats import multivariate_normal
+from scipy.special import logsumexp
 
 from . import da_method
 
@@ -97,12 +98,12 @@ class PartFilt:
                     #print(diag)
                     full_likelihood += w[i] * multivariate_normal.pdf(yy[ko], mean=E[i], cov=cov, allow_singular = True)
                 #print(ko, full_likelihood, likelihood)
-                if full_likelihood < anomaly_threshold:
-                    #if full_likelihood == 0:
-                     #   print("underflow")
-                    print("\n*****resampling*****\n")
-                    Xn = modelling.GaussRV(C=CovMat(HMM.Obs.noise.C.full, kind='full'), mu=yy[ko])
-                    E = Xn.sample(N)
+                # if full_likelihood < anomaly_threshold:
+                #     #if full_likelihood == 0:
+                #      #   print("underflow")
+                #     print("\n*****resampling*****\n")
+                #     Xn = modelling.GaussRV(C=CovMat(HMM.Obs.noise.C.full, kind='full'), mu=yy[ko])
+                #     E = Xn.sample(N)
 
                 self.likelihoods[ko] = -full_likelihood
 
@@ -124,12 +125,19 @@ class PartFilt:
 
 def compute_likelihood(E, w, new_y, HMM):
     likelihood = 0
+    #log_likelihood_terms = np.zeros(E.shape[0])
     for i in range(E.shape[0]):
-        # print(diag)
+
+        # log_likelihood_terms[i] = np.log(w[i]) + multivariate_normal.logpdf(new_y,
+        #                                                                  mean=E[i],
+        #                                                                  cov=HMM.Obs.noise.C.full,
+        #                                                                  allow_singular=True)
         likelihood += w[i] * multivariate_normal.pdf(new_y,
                                                      mean=E[i],
                                                      cov=HMM.Obs.noise.C.full,
                                                      allow_singular=True)
+
+    #return logsumexp(log_likelihood_terms)
     return likelihood
 @particle_method
 class OptPF:
@@ -165,9 +173,9 @@ class OptPF:
                 E += np.sqrt(dt)*(rnd.randn(N, Nx)@HMM.Dyn.noise.C.Right)
 
             if ko is not None:
-                #print(ko, likelihood)
 
                 observation_likelihood = compute_likelihood(E, w, yy[ko], HMM)
+                print(observation_likelihood)
 
                 # cumulative_w = np.cumsum(w)
                 # n_samples = 100
