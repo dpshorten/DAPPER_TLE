@@ -12,8 +12,8 @@ sys.path.insert(0, base_package_load_path)
 sys.path.insert(0, base_package_load_path + "/TLE_utilities")
 from tle_loading_and_preprocessing import convert_np_keplerian_coordinates_to_cartesian, propagate_np_mean_elements
 
-PATH_LENGTH = 10
-PATH_LENGTH_SAT = 20
+PATH_LENGTH = 60
+PATH_LENGTH_SAT = 120
 
 SATELLITE_PATH_COLORS = ["red", "cyan", "chartreuse"]
 
@@ -26,7 +26,7 @@ def update_plot(num,
                 satellite_head,
                 x, y, z):
 
-    satellite_color_index = max(int(round((num - 9)/ 20)) % 3, 0)
+    satellite_color_index = max(int(round((num - 54)/ 120)) % 3, 0)
     path_length = min(num, PATH_LENGTH)
     path_length_sat = min(num, PATH_LENGTH_SAT)
     satellite_trace.set_data(satellite_positions[(num - path_length_sat):num, :2].T)
@@ -46,13 +46,15 @@ def update_plot(num,
 
 # Data: 40 random walks as (num_steps, 3) arrays
 EPOCHS = 1000
-INFLATION_FACTOR = 1
+INFLATION_FACTOR = 6
 num_steps = EPOCHS * INFLATION_FACTOR
 
 particle_positions = pickle.load(open("filter_logs/Skysat-C19_c_1_particle_positions.pkl", "rb"))
-#pd_df_satellite_positions = pickle.load(open("filter_logs/Skysat-C19_c_1_satellites.pkl", "rb"))
+satelliteTLEData_satellites = pickle.load(open("filter_logs/Skysat-C19_c_1_satellites.pkl", "rb"))
+#pd_df_satellite_positions = satelliteTLEData_satellites.pd_df_tle_data
 
 pd_df_satellite_positions = pd.read_pickle("foo.pkl")
+#pd_df_satellite_positions = pd
 
 # print(satelliteTLEData_satellites.pd_df_tle_data.iloc[:20])
 # print(satelliteTLEData_satellites.pd_df_tle_data.iloc[-20:])
@@ -75,9 +77,9 @@ for i in range(0, EPOCHS):
     #print(satellite_cartesian_positions[INFLATION_FACTOR * i, :])
 
     for k in range(INFLATION_FACTOR - 1):
-        next_satellite_pos = propagate_np_mean_elements(pd_df_satellite_positions.pd_df_tle_data.values[i + 1, :],
-                                                        pd_df_satellite_positions.list_of_tle_line_tuples[i + 1],
-                                                        pd_df_satellite_positions.list_of_tle_line_tuples[i + 2],
+        next_satellite_pos = propagate_np_mean_elements(pd_df_satellite_positions.values[i + 1, :],
+                                                        satelliteTLEData_satellites.list_of_tle_line_tuples[i + 1],
+                                                        satelliteTLEData_satellites.list_of_tle_line_tuples[i + 2],
                                                         proportion=(k + 1) / INFLATION_FACTOR)
         satellite_cartesian_positions[INFLATION_FACTOR * i + k + 1, :] = (
             convert_np_keplerian_coordinates_to_cartesian(next_satellite_pos)[:3])
@@ -86,8 +88,8 @@ for i in range(0, EPOCHS):
             particle_positions[i, j, :] + perturbations[j])[:3]
         for k in range(INFLATION_FACTOR - 1):
             next_pos = propagate_np_mean_elements(particle_positions[i, j, :],
-                                                  pd_df_satellite_positions.list_of_tle_line_tuples[i + 1],
-                                                  pd_df_satellite_positions.list_of_tle_line_tuples[i + 2],
+                                                  satelliteTLEData_satellites.list_of_tle_line_tuples[i + 1],
+                                                  satelliteTLEData_satellites.list_of_tle_line_tuples[i + 2],
                                                   proportion = (k + 1)/INFLATION_FACTOR)
             particle_cartesian_positions[INFLATION_FACTOR * i + k + 1, j, :] = (
                 convert_np_keplerian_coordinates_to_cartesian(next_pos + perturbations[j])[:3])
@@ -141,5 +143,5 @@ ani = animation.FuncAnimation(
                                         x, y, z,
                                         ), interval=75)
 #plt.show()
-writer = animation.FFMpegFileWriter(fps = 12)
+writer = animation.FFMpegFileWriter(fps = 40)
 ani.save("foo.mp4",  writer=writer, dpi = 200)

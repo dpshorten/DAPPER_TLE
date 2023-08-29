@@ -55,11 +55,20 @@ class PartFilt:
     # if miN < 1:
     # miN = N*miN
 
-    def assimilate(self, HMM, xx, yy, anomaly_threshold):
+    def assimilate(self,
+                   HMM,
+                   xx,
+                   yy,
+                   restart_threshold,
+                   indices_for_marginal_anomaly_detection,
+                   observation_covariance_for_marginal_anomaly_detection):
+
         N, Nx, Rm12 = self.N, HMM.Dyn.M, HMM.Obs.noise.C.sym_sqrt_inv
 
-        self.likelihoods = np.zeros(HMM.tseq.Ko + 1)
+        self.negative_log_likelihoods = np.zeros(HMM.tseq.Ko + 1)
+        self.marginal_negative_log_likelihoods = np.zeros(HMM.tseq.Ko + 1)
         self.particle_positions = np.zeros((HMM.tseq.Ko + 1, N, Nx))
+        self.n_effective = np.zeros((HMM.tseq.Ko + 1, N, Nx))
 
         E = HMM.X0.sample(N)
         w = 1/N*np.ones(N)
@@ -72,7 +81,7 @@ class PartFilt:
                 D  = rnd.randn(N, Nx)
                 #E += np.sqrt(dt*self.qroot)*(D@HMM.Dyn.noise.C.Right)
 
-                E += np.random.multivariate_normal(mean = np.zeros(6), cov = np.array(HMM.Dyn.noise.C.full), size = len(E))
+                E += np.random.multivariate_normal(mean=np.zeros(6), cov=np.array(HMM.Dyn.noise.C.full), size=len(E))
 
                 if self.qroot != 1.0:
                     # Evaluate p/q (for each col of D) when q:=p**(1/self.qroot).
@@ -84,28 +93,20 @@ class PartFilt:
 
                 innovs = (yy[ko] - HMM.Obs(E, t)) @ Rm12.T
 
-                #self.likelihoods[ko] = np.sum(np.exp(np.log(w) -0.5 * np.sum(innovs**2, axis = 1)))
-                #print(HMM.Obs(yy[ko], t))
-                #print(HMM.Obs(yy[ko], t))
-                diag = np.array(HMM.Obs.noise.C.diag)
-                cov = np.array(HMM.Obs.noise.C.full)
-                #diag[diag < 1e-12] = 1e-12
-                #mu = np.zeros(cov.shape[0])
-                #print(E)
-                likelihood = 0
-                full_likelihood = 0
-                for i in range(E.shape[0]):
-                    #print(diag)
-                    full_likelihood += w[i] * multivariate_normal.pdf(yy[ko], mean=E[i], cov=cov, allow_singular = True)
-                #print(ko, full_likelihood, likelihood)
-                # if full_likelihood < anomaly_threshold:
-                #     #if full_likelihood == 0:
-                #      #   print("underflow")
-                #     print("\n*****resampling*****\n")
-                #     Xn = modelling.GaussRV(C=CovMat(HMM.Obs.noise.C.full, kind='full'), mu=yy[ko])
-                #     E = Xn.sample(N)
+                observation_log_likelihood = compute_log_likelihood(E, w, yy[ko], HMM.Obs.noise.C.full)
+                marginal_observation_log_likelihood = compute_log_likelihood(E,
+                                                                             w,
+                                                                             yy[ko],
+                                                                             observation_covariance_for_marginal_anomaly_detection,
+                                                                             observation_indices=indices_for_marginal_anomaly_detection)
 
-                self.likelihoods[ko] = -full_likelihood
+                self.negative_log_likelihoods[ko] = -observation_log_likelihood
+                self.marginal_negative_log_likelihoods[ko] = -marginal_observation_log_likelihood
+
+                if observation_log_likelihood < restart_threshold:
+                    #print("\n*****restarting*****\n")
+                    Xn = modelling.GaussRV(C=CovMat(HMM.Obs.noise.C.full, kind='full'), mu=yy[ko])
+                    E = Xn.sample(N)
 
                 w = reweight(w, innovs=innovs)
 
@@ -120,25 +121,26 @@ class PartFilt:
                     #     w /= w.sum()
 
                 self.particle_positions[ko, :, :] = E
+                self.n_effective = 1 / (w @ w)
 
             self.stats.assess(k, ko, 'u', E=E, w=w)
 
-def compute_likelihood(E, w, new_y, HMM):
-    likelihood = 0
-    #log_likelihood_terms = np.zeros(E.shape[0])
+def compute_log_likelihood(E, w, new_y, observation_covariance, observation_indices = np.arange(6)):
+    #likelihood = 0
+    log_likelihood_terms = np.zeros(E.shape[0])
     for i in range(E.shape[0]):
 
-        # log_likelihood_terms[i] = np.log(w[i]) + multivariate_normal.logpdf(new_y,
-        #                                                                  mean=E[i],
-        #                                                                  cov=HMM.Obs.noise.C.full,
-        #                                                                  allow_singular=True)
-        likelihood += w[i] * multivariate_normal.pdf(new_y,
-                                                     mean=E[i],
-                                                     cov=HMM.Obs.noise.C.full,
-                                                     allow_singular=True)
+        log_likelihood_terms[i] = np.log(w[i]) + multivariate_normal.logpdf(new_y[observation_indices],
+                                                                         mean=E[i][observation_indices],
+                                                                         cov=observation_covariance,
+                                                                         allow_singular=True)
+        # likelihood += w[i] * multivariate_normal.pdf(new_y,
+        #                                              mean=E[i],
+        #                                              cov=HMM.Obs.noise.C.full,
+        #                                              allow_singular=True)
 
-    #return logsumexp(log_likelihood_terms)
-    return likelihood
+    return logsumexp(log_likelihood_terms)
+    #return likelihood
 @particle_method
 class OptPF:
     """'Optimal proposal' particle filter, also known as 'Implicit particle filter'.
@@ -156,11 +158,20 @@ class OptPF:
     nuj: bool    = True
     wroot: float = 1.0
 
-    def assimilate(self, HMM, xx, yy, restart_threshold):
+    def assimilate(self,
+                   HMM,
+                   xx,
+                   yy,
+                   restart_threshold,
+                   indices_for_marginal_anomaly_detection,
+                   observation_covariance_for_marginal_anomaly_detection):
+
         N, Nx, R = self.N, HMM.Dyn.M, HMM.Obs.noise.C.full
 
-        self.likelihoods = np.zeros(HMM.tseq.Ko + 1)
+        self.negative_log_likelihoods = np.zeros(HMM.tseq.Ko + 1)
+        self.marginal_negative_log_likelihoods = np.zeros(HMM.tseq.Ko + 1)
         self.particle_positions = np.zeros((HMM.tseq.Ko + 1, N, Nx))
+        self.n_effective = np.zeros((HMM.tseq.Ko + 1, N, Nx))
 
         E = HMM.X0.sample(N)
         w = 1/N*np.ones(N)
@@ -170,12 +181,16 @@ class OptPF:
         for k, ko, t, dt in progbar(HMM.tseq.ticker):
             E = HMM.Dyn(E, t-dt, dt)
             if HMM.Dyn.noise.C != 0:
-                E += np.sqrt(dt)*(rnd.randn(N, Nx)@HMM.Dyn.noise.C.Right)
+                #E += np.sqrt(dt)*(rnd.randn(N, Nx)@HMM.Dyn.noise.C.Right)
+                E += np.random.multivariate_normal(mean=np.zeros(6), cov=np.array(HMM.Dyn.noise.C.full), size=len(E))
 
             if ko is not None:
-
-                observation_likelihood = compute_likelihood(E, w, yy[ko], HMM)
-                print(observation_likelihood)
+                observation_log_likelihood = compute_log_likelihood(E, w, yy[ko], HMM.Obs.noise.C.full)
+                marginal_observation_log_likelihood = compute_log_likelihood(E,
+                                                                             w,
+                                                                             yy[ko],
+                                                                             observation_covariance_for_marginal_anomaly_detection,
+                                                                             observation_indices=indices_for_marginal_anomaly_detection)
 
                 # cumulative_w = np.cumsum(w)
                 # n_samples = 100
@@ -197,7 +212,15 @@ class OptPF:
                 # s_a /= n_samples
                 # print("anomaly satistic:", s_a)
 
-                self.likelihoods[ko] = - observation_likelihood
+                self.negative_log_likelihoods[ko] = - observation_log_likelihood
+                self.marginal_negative_log_likelihoods[ko] = - marginal_observation_log_likelihood
+                #print(self.likelihoods[ko])
+
+                if observation_log_likelihood < restart_threshold:
+                     #print("\n*****restarting*****\n")
+                     Xn = modelling.GaussRV(C=CovMat(HMM.Obs.noise.C.full, kind='full'), mu=yy[ko])
+                     E = Xn.sample(N)
+
                 self.stats.assess(k, ko, 'f', E=E, w=w)
                 y = yy[ko]
 
@@ -227,6 +250,7 @@ class OptPF:
                     E, _    = regularize(C12, E, idx, self.nuj)
 
                 self.particle_positions[ko, :, :] = E
+                self.n_effective = 1 / (w @ w)
 
             self.stats.assess(k, ko, 'u', E=E, w=w)
 
