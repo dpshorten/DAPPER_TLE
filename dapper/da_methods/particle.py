@@ -59,7 +59,7 @@ class PartFilt:
                    HMM,
                    xx,
                    yy,
-                   restart_threshold,
+                   shift_threshold,
                    indices_for_marginal_anomaly_detection,
                    observation_covariance_for_marginal_anomaly_detection):
 
@@ -103,10 +103,8 @@ class PartFilt:
                 self.negative_log_likelihoods[ko] = -observation_log_likelihood
                 self.marginal_negative_log_likelihoods[ko] = -marginal_observation_log_likelihood
 
-                if observation_log_likelihood < restart_threshold:
-                    #print("\n*****restarting*****\n")
-                    Xn = modelling.GaussRV(C=CovMat(HMM.Obs.noise.C.full, kind='full'), mu=yy[ko])
-                    E = Xn.sample(N)
+                if observation_log_likelihood < shift_threshold:
+                    E += yy[ko] - np.mean(E, axis = 0)
 
                 w = reweight(w, innovs=innovs)
 
@@ -162,7 +160,7 @@ class OptPF:
                    HMM,
                    xx,
                    yy,
-                   restart_threshold,
+                   shift_threshold,
                    indices_for_marginal_anomaly_detection,
                    observation_covariance_for_marginal_anomaly_detection):
 
@@ -216,10 +214,8 @@ class OptPF:
                 self.marginal_negative_log_likelihoods[ko] = - marginal_observation_log_likelihood
                 #print(self.likelihoods[ko])
 
-                if observation_log_likelihood < restart_threshold:
-                     #print("\n*****restarting*****\n")
-                     Xn = modelling.GaussRV(C=CovMat(HMM.Obs.noise.C.full, kind='full'), mu=yy[ko])
-                     E = Xn.sample(N)
+                if observation_log_likelihood < shift_threshold:
+                    E += yy[ko] - np.mean(E, axis=0)
 
                 self.stats.assess(k, ko, 'f', E=E, w=w)
                 y = yy[ko]

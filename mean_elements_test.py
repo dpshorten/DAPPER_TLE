@@ -54,8 +54,8 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
     normalisation_weights = np.sqrt(np.diag(initial_residuals_covariance))
     final_residuals_covariance = EmpiricalCovariance(assume_centered = True).fit(np.divide(pd_df_residuals.values, normalisation_weights)).covariance_
     #final_residuals_covariance = MinCovDet(support_fraction = 0.9, assume_centered=True).fit(np.divide(np_residuals, normalisation_weights)).covariance_
-    #final_residuals_covariance[1, 3] = 0
-    #final_residuals_covariance[3, 1] = 0
+    #final_residuals_covariance[1, 3] = -0.1
+    #final_residuals_covariance[3, 1] = -0.1
 
     propagation_covariance = np.copy(final_residuals_covariance)
     # Because the variables have been scaled, the covariance is already a correlation matrix
@@ -65,6 +65,8 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
     propagation_covariance[1, 3] = -1
     propagation_covariance[3, 1] = -1
     propagation_covariance = scaling_matrix @ propagation_covariance @ scaling_matrix
+
+    final_residuals_covariance = np.diag(np.diag(final_residuals_covariance))
 
     observation_covariance_in_anomaly_dimensions = np.zeros(
         (len(INDICES_FOR_MARGINAL_ANOMALY_DETECTION), len(INDICES_FOR_MARGINAL_ANOMALY_DETECTION)))
@@ -104,7 +106,6 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
                          element_set=dict_shared_parameters["element set"],
                          ),
         'noise': modelling.GaussRV(C = CovMat(propagation_covariance, kind ='full')),
-        #'noise': modelling.GaussRV(C=CovMat(0*residuals_covariance, kind='full')),
     }
 
     X0 = modelling.GaussRV(C = CovMat(final_residuals_covariance, kind ='full'), mu = x0)
@@ -112,9 +113,6 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
 
     tseq = modelling.Chronology(dt=1, dko=1, Ko=xx.shape[0]-2, Tplot=20, BurnIn=10)
     HMM = modelling.HiddenMarkovModel(Dyn, Obs, tseq, X0)
-
-    restart_threshold = -2e1
-    print("restart threshold", restart_threshold)
 
     if dict_parameters["method variant"] == "boot":
         xp = da.PartFilt(N = dict_parameters["num particles"], reg = 1, NER = 0.2, qroot = 1, wroot = 1)
@@ -124,6 +122,8 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
         print("Invalid method variant")
         quit()
 
+    print("type", type(dict_method_parameters["shift threshold"]))
+
     if PLOT_MARGINALS:
         HMM.liveplotters = live_plots(plot_marginals = PLOT_MARGINALS,
                                       use_keplerian_coordinates = USE_KEPLERIAN_COORDINATES,
@@ -131,7 +131,7 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
         xp.assimilate(HMM,
                       xx[:],
                       yy[:],
-                      restart_threshold,
+                      dict_method_parameters["shift threshold"],
                       INDICES_FOR_MARGINAL_ANOMALY_DETECTION,
                       observation_covariance_in_anomaly_dimensions,
                       liveplots = True)
@@ -139,7 +139,7 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
         xp.assimilate(HMM,
                       xx[:],
                       yy[:],
-                      restart_threshold,
+                      dict_method_parameters["shift threshold"],
                       INDICES_FOR_MARGINAL_ANOMALY_DETECTION,
                       observation_covariance_in_anomaly_dimensions)
 
@@ -149,15 +149,17 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
     pd_df_results = pd_df_results[[dict_shared_parameters["detection column name"],
                                    dict_shared_parameters["secondary detection column name"]]]
 
-    # Saving for the purpose of animation creation
-    pickle.dump(xp.particle_positions, open(dict_parameters["filter logs directory"] +
-                                            satellite_names_list[satellite_index] +
-                                            "_" + dict_parameters["method variant"] +
-                                            dict_parameters["particle positions log suffix"], "wb"))
-    pickle.dump(satelliteTLEData_satellites, open(dict_parameters["filter logs directory"] +
-                                            satellite_names_list[satellite_index] +
-                                            "_" + dict_parameters["method variant"] +
-                                            dict_parameters["satellites log suffix"], "wb"))
+
+    if dict_shared_parameters["satellite set"] == "simulated_video":
+        # Saving for the purpose of animation creation
+        pickle.dump(xp.particle_positions, open(dict_parameters["filter logs directory"] +
+                                                satellite_names_list[satellite_index] +
+                                                "_" + dict_parameters["method variant"] +
+                                                dict_parameters["particle positions log suffix"], "wb"))
+        pickle.dump(satelliteTLEData_satellites, open(dict_parameters["filter logs directory"] +
+                                                satellite_names_list[satellite_index] +
+                                                "_" + dict_parameters["method variant"] +
+                                                dict_parameters["satellites log suffix"], "wb"))
     pickle.dump(xp.n_effective, open(dict_parameters["filter logs directory"] +
                                      satellite_names_list[satellite_index] +
                                      "_" + dict_parameters["method variant"] +

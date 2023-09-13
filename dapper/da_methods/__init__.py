@@ -104,7 +104,7 @@ def da_method(*default_dataclasses):
                        HMM,
                        xx,
                        yy,
-                       restart_threshold,
+                       shift_threshold,
                        indices_for_marginal_anomaly_detection,
                        observation_covariance_for_marginal_anomaly_detection,
                        desc=None,
@@ -123,7 +123,7 @@ def da_method(*default_dataclasses):
                             HMM,
                             xx,
                             yy,
-                            restart_threshold,
+                            shift_threshold,
                             indices_for_marginal_anomaly_detection,
                             observation_covariance_for_marginal_anomaly_detection)
             except Exception as ERR:

@@ -12,8 +12,8 @@ sys.path.insert(0, base_package_load_path)
 sys.path.insert(0, base_package_load_path + "/TLE_utilities")
 from tle_loading_and_preprocessing import convert_np_keplerian_coordinates_to_cartesian, propagate_np_mean_elements
 
-PATH_LENGTH = 60
-PATH_LENGTH_SAT = 120
+PATH_LENGTH = 15
+PATH_LENGTH_SAT = 30
 
 SATELLITE_PATH_COLORS = ["red", "cyan", "chartreuse"]
 
@@ -45,12 +45,12 @@ def update_plot(num,
     return particle_traces
 
 # Data: 40 random walks as (num_steps, 3) arrays
-EPOCHS = 1000
-INFLATION_FACTOR = 6
+EPOCHS = 50
+INFLATION_FACTOR = 10
 num_steps = EPOCHS * INFLATION_FACTOR
 
-particle_positions = pickle.load(open("filter_logs/Skysat-C19_c_1_particle_positions.pkl", "rb"))
-satelliteTLEData_satellites = pickle.load(open("filter_logs/Skysat-C19_c_1_satellites.pkl", "rb"))
+particle_positions = pickle.load(open("filter_logs/Skysat-C19_c_1_boot_particle_positions.pkl", "rb"))
+satelliteTLEData_satellites = pickle.load(open("filter_logs/Skysat-C19_c_1_boot_satellites.pkl", "rb"))
 #pd_df_satellite_positions = satelliteTLEData_satellites.pd_df_tle_data
 
 pd_df_satellite_positions = pd.read_pickle("foo.pkl")
@@ -143,5 +143,5 @@ ani = animation.FuncAnimation(
                                         x, y, z,
                                         ), interval=75)
 #plt.show()
-writer = animation.FFMpegFileWriter(fps = 40)
+writer = animation.FFMpegFileWriter(fps = 10)
 ani.save("foo.mp4",  writer=writer, dpi = 200)

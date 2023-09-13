@@ -1,6 +1,7 @@
 dapper n jobs: 12
 num particles: 100
 anom and perigee variance scaling factor: 2
+shift threshold: -1.0e+3
 
 method name: "filter"
 method variant: "boot"
