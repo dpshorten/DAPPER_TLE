@@ -17,6 +17,8 @@ PATH_LENGTH_SAT = 30
 
 SATELLITE_PATH_COLORS = ["red", "cyan", "chartreuse"]
 
+SAVE_FRAME = 203
+
 def update_plot(num,
                 particle_positions,
                 particle_traces,
@@ -42,10 +44,14 @@ def update_plot(num,
         particle_trace.set_3d_properties(particle_position[(num - path_length):num, 2])
         particle_head.set_data(particle_position[(num-1), :2].T)
         particle_head.set_3d_properties(particle_position[(num-1), 2])
+
+    if num == SAVE_FRAME:
+        plt.savefig("diagram_still.svg")
+
     return particle_traces
 
 # Data: 40 random walks as (num_steps, 3) arrays
-EPOCHS = 50
+EPOCHS = 25
 INFLATION_FACTOR = 10
 num_steps = EPOCHS * INFLATION_FACTOR
 

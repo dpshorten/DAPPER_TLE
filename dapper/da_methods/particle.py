@@ -91,7 +91,7 @@ class PartFilt:
             if ko is not None:
                 self.stats.assess(k, ko, 'f', E=E, w=w)
 
-                innovs = (yy[ko] - HMM.Obs(E, t)) @ Rm12.T
+
 
                 observation_log_likelihood = compute_log_likelihood(E, w, yy[ko], HMM.Obs.noise.C.full)
                 marginal_observation_log_likelihood = compute_log_likelihood(E,
@@ -104,7 +104,9 @@ class PartFilt:
                 self.marginal_negative_log_likelihoods[ko] = -marginal_observation_log_likelihood
 
                 if observation_log_likelihood < shift_threshold:
-                    E += yy[ko] - np.mean(E, axis = 0)
+                    E[:, [0, 2, 4, 5]] += yy[ko][[0, 2, 4, 5]] - np.sum(np.repeat(w[...,None], 4, axis = 1) * E[:, [0, 2, 4, 5]], axis = 0)
+
+                innovs = (yy[ko] - HMM.Obs(E, t)) @ Rm12.T
 
                 w = reweight(w, innovs=innovs)
 
@@ -190,32 +192,13 @@ class OptPF:
                                                                              observation_covariance_for_marginal_anomaly_detection,
                                                                              observation_indices=indices_for_marginal_anomaly_detection)
 
-                # cumulative_w = np.cumsum(w)
-                # n_samples = 100
-                # s_a = 0
-                # for i in range(n_samples):
-                #     place = np.random.random()
-                #     index = np.searchsorted(cumulative_w, place)
-                #     sample = multivariate_normal.rvs(mean=E[index],
-                #                                      cov=HMM.Obs.noise.C.full)
-                #     # print(index)
-                #     # print(w[index])
-                #     # print(sample)
-                #     # print(E[index])
-                #     # print(yy[ko])
-                #     sample_likelihood = compute_likelihood(E, w, sample, HMM)
-                #     #print(sample_likelihood, observation_likelihood)
-                #     if sample_likelihood < observation_likelihood:
-                #         s_a += 1
-                # s_a /= n_samples
-                # print("anomaly satistic:", s_a)
-
                 self.negative_log_likelihoods[ko] = - observation_log_likelihood
                 self.marginal_negative_log_likelihoods[ko] = - marginal_observation_log_likelihood
                 #print(self.likelihoods[ko])
 
                 if observation_log_likelihood < shift_threshold:
-                    E += yy[ko] - np.mean(E, axis=0)
+                    E[:, [0, 2, 4, 5]] += yy[ko][[0, 2, 4, 5]] - np.sum(
+                        np.repeat(w[..., None], 4, axis=1) * E[:, [0, 2, 4, 5]], axis=0)
 
                 self.stats.assess(k, ko, 'f', E=E, w=w)
                 y = yy[ko]
