@@ -61,7 +61,8 @@ class PartFilt:
                    yy,
                    shift_threshold,
                    indices_for_marginal_anomaly_detection,
-                   observation_covariance_for_marginal_anomaly_detection):
+                   indices_for_shift_detection
+                   ):
 
         N, Nx, Rm12 = self.N, HMM.Dyn.M, HMM.Obs.noise.C.sym_sqrt_inv
 
@@ -79,8 +80,6 @@ class PartFilt:
             E = HMM.Dyn(E, t-dt, dt)
             if HMM.Dyn.noise.C != 0:
                 D  = rnd.randn(N, Nx)
-                #E += np.sqrt(dt*self.qroot)*(D@HMM.Dyn.noise.C.Right)
-
                 E += np.random.multivariate_normal(mean=np.zeros(6), cov=np.array(HMM.Dyn.noise.C.full), size=len(E))
 
                 if self.qroot != 1.0:
@@ -91,20 +90,27 @@ class PartFilt:
             if ko is not None:
                 self.stats.assess(k, ko, 'f', E=E, w=w)
 
-
-
                 observation_log_likelihood = compute_log_likelihood(E, w, yy[ko], HMM.Obs.noise.C.full)
-                marginal_observation_log_likelihood = compute_log_likelihood(E,
-                                                                             w,
-                                                                             yy[ko],
-                                                                             observation_covariance_for_marginal_anomaly_detection,
-                                                                             observation_indices=indices_for_marginal_anomaly_detection)
+                marginal_observation_log_likelihood = (
+                    compute_log_likelihood(E,
+                                           w,
+                                           yy[ko],
+                                           HMM.Obs.noise.C.full[indices_for_marginal_anomaly_detection, indices_for_marginal_anomaly_detection],
+                                           observation_indices = indices_for_marginal_anomaly_detection))
+                shift_observation_log_likelihood = (
+                    compute_log_likelihood(E,
+                                           w,
+                                           yy[ko],
+                                           HMM.Obs.noise.C.full[indices_for_shift_detection, indices_for_shift_detection],
+                                           observation_indices = indices_for_shift_detection))
+
+
 
                 self.negative_log_likelihoods[ko] = -observation_log_likelihood
                 self.marginal_negative_log_likelihoods[ko] = -marginal_observation_log_likelihood
 
-                if observation_log_likelihood < shift_threshold:
-                    E[:, [0, 2, 4, 5]] += yy[ko][[0, 2, 4, 5]] - np.sum(np.repeat(w[...,None], 4, axis = 1) * E[:, [0, 2, 4, 5]], axis = 0)
+                if shift_observation_log_likelihood < shift_threshold:
+                    E += yy[ko] - np.sum(np.repeat(w[..., None], 6, axis=1) * E, axis=0)
 
                 innovs = (yy[ko] - HMM.Obs(E, t)) @ Rm12.T
 
@@ -134,13 +140,8 @@ def compute_log_likelihood(E, w, new_y, observation_covariance, observation_indi
                                                                          mean=E[i][observation_indices],
                                                                          cov=observation_covariance,
                                                                          allow_singular=True)
-        # likelihood += w[i] * multivariate_normal.pdf(new_y,
-        #                                              mean=E[i],
-        #                                              cov=HMM.Obs.noise.C.full,
-        #                                              allow_singular=True)
 
     return logsumexp(log_likelihood_terms)
-    #return likelihood
 @particle_method
 class OptPF:
     """'Optimal proposal' particle filter, also known as 'Implicit particle filter'.
@@ -164,7 +165,8 @@ class OptPF:
                    yy,
                    shift_threshold,
                    indices_for_marginal_anomaly_detection,
-                   observation_covariance_for_marginal_anomaly_detection):
+                   indices_for_shift_detection,
+                   ):
 
         N, Nx, R = self.N, HMM.Dyn.M, HMM.Obs.noise.C.full
 
@@ -181,24 +183,29 @@ class OptPF:
         for k, ko, t, dt in progbar(HMM.tseq.ticker):
             E = HMM.Dyn(E, t-dt, dt)
             if HMM.Dyn.noise.C != 0:
-                #E += np.sqrt(dt)*(rnd.randn(N, Nx)@HMM.Dyn.noise.C.Right)
                 E += np.random.multivariate_normal(mean=np.zeros(6), cov=np.array(HMM.Dyn.noise.C.full), size=len(E))
 
             if ko is not None:
+
                 observation_log_likelihood = compute_log_likelihood(E, w, yy[ko], HMM.Obs.noise.C.full)
-                marginal_observation_log_likelihood = compute_log_likelihood(E,
-                                                                             w,
-                                                                             yy[ko],
-                                                                             observation_covariance_for_marginal_anomaly_detection,
-                                                                             observation_indices=indices_for_marginal_anomaly_detection)
+                marginal_observation_log_likelihood = (
+                    compute_log_likelihood(E,
+                                           w,
+                                           yy[ko],
+                                           HMM.Obs.noise.C.full[indices_for_marginal_anomaly_detection, indices_for_marginal_anomaly_detection],
+                                           observation_indices=indices_for_marginal_anomaly_detection))
+                shift_observation_log_likelihood = (
+                    compute_log_likelihood(E,
+                                           w,
+                                           yy[ko],
+                                           HMM.Obs.noise.C.full[indices_for_shift_detection, indices_for_shift_detection],
+                                           observation_indices=indices_for_shift_detection))
 
                 self.negative_log_likelihoods[ko] = - observation_log_likelihood
                 self.marginal_negative_log_likelihoods[ko] = - marginal_observation_log_likelihood
-                #print(self.likelihoods[ko])
 
-                if observation_log_likelihood < shift_threshold:
-                    E[:, [0, 2, 4, 5]] += yy[ko][[0, 2, 4, 5]] - np.sum(
-                        np.repeat(w[..., None], 4, axis=1) * E[:, [0, 2, 4, 5]], axis=0)
+                if shift_observation_log_likelihood < shift_threshold:
+                    E += yy[ko] - np.sum(np.repeat(w[..., None], 6, axis=1) * E, axis=0)
 
                 self.stats.assess(k, ko, 'f', E=E, w=w)
                 y = yy[ko]

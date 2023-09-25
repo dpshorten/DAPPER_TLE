@@ -106,7 +106,7 @@ def da_method(*default_dataclasses):
                        yy,
                        shift_threshold,
                        indices_for_marginal_anomaly_detection,
-                       observation_covariance_for_marginal_anomaly_detection,
+                       indices_for_shift_detection,
                        desc=None,
                        fail_gently=False,
                        **stat_kwargs):
@@ -125,7 +125,8 @@ def da_method(*default_dataclasses):
                             yy,
                             shift_threshold,
                             indices_for_marginal_anomaly_detection,
-                            observation_covariance_for_marginal_anomaly_detection)
+                            indices_for_shift_detection,
+                            )
             except Exception as ERR:
                 if fail_gently:
                     self.crashed = True

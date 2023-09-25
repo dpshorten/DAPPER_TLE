@@ -1,0 +1,18 @@
+dapper n jobs: 12
+num particles: 100
+anom and perigee variance scaling factor: 3
+shift threshold: -1.0e+1
+covariance outlier removal factor: 10
+
+method name: "filter"
+method variant: "boot"
+has secondary detection columns: True
+primary detection column label: "full likelihood"
+secondary detection column label: "marginal likelihood"
+detection results save suffix: "_detections.pkl"
+method base directory: "/home/david/Projects/DAPPER_TLE/"
+detection results save directory: "./detection_results/"
+filter logs directory: "./filter_logs/"
+particle positions log suffix: "_particle_positions.pkl"
+satellites log suffix: "_satellites.pkl"
+n effective log suffix: "_n_effective.pkl"

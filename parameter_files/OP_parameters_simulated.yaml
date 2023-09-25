@@ -1,7 +1,8 @@
 dapper n jobs: 12
-num particles: 500
+num particles: 100
 anom and perigee variance scaling factor: 3
 shift threshold: -1.0e+1
+covariance outlier removal factor: 10
 
 method name: "filter"
 method variant: "OP"
