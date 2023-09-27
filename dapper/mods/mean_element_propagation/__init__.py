@@ -10,11 +10,11 @@ import dapper.mods as modelling
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
 
-sys.path.append(os.path.dirname(this_directory + "/../../../../TLE_utilities"))
-from TLE_utilities.tle_loading_and_preprocessing import (propagate_np_mean_elements,
-                                                         load_tle_data_from_file,
-                                                         convert_np_keplerian_coordinates_to_cartesian,
-                                                         convert_np_cartesian_coordinates_to_keplerian,)
+sys.path.append(this_directory + "/../../../../TLE_utilities/")
+from utilities import (propagate_np_mean_elements,
+                       load_tle_data_from_file,
+                       convert_np_keplerian_coordinates_to_cartesian,
+                       convert_np_cartesian_coordinates_to_keplerian,)
 
 def propagate_mean_elements(particle_index,
                             np_mean_elements_of_particles,

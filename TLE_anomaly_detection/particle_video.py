@@ -55,8 +55,8 @@ EPOCHS = 25
 INFLATION_FACTOR = 10
 num_steps = EPOCHS * INFLATION_FACTOR
 
-particle_positions = pickle.load(open("filter_logs/Skysat-C19_c_1_boot_particle_positions.pkl", "rb"))
-satelliteTLEData_satellites = pickle.load(open("filter_logs/Skysat-C19_c_1_boot_satellites.pkl", "rb"))
+particle_positions = pickle.load(open("../filter_logs/Skysat-C19_c_1_boot_particle_positions.pkl", "rb"))
+satelliteTLEData_satellites = pickle.load(open("../filter_logs/Skysat-C19_c_1_boot_satellites.pkl", "rb"))
 #pd_df_satellite_positions = satelliteTLEData_satellites.pd_df_tle_data
 
 pd_df_satellite_positions = pd.read_pickle("foo.pkl")

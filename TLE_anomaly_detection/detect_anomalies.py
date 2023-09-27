@@ -11,8 +11,7 @@ from sklearn.covariance import MinCovDet, EmpiricalCovariance
 import pickle
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
-
-sys.path.append(os.path.dirname(this_directory))
+sys.path.append(this_directory + "/../")
 import dapper.da_methods as da
 import dapper.mods as modelling
 from dapper.mods.mean_element_propagation import step, live_plots
@@ -20,12 +19,12 @@ from dapper.mods.mean_element_propagation import step, live_plots
 from dapper.tools.matrices import CovMat
 from dapper.da_methods.particle import reweight
 
-sys.path.append(os.path.dirname(this_directory + "/../TLE_utilities/"))
-from TLE_utilities.tle_loading_and_preprocessing import (propagate_SatelliteTLEData_object,
-                                                         get_np_mean_elements_from_satelliteTLEData_object,
-                                                         load_tle_data_from_file,
-                                                         DICT_ELEMENT_NAMES)
-from TLE_utilities.evaluation import run_a_method_on_satellites
+sys.path.append(this_directory + "/../../TLE_utilities/")
+from utilities import (propagate_SatelliteTLEData_object,
+                       get_np_mean_elements_from_satelliteTLEData_object,
+                       load_tle_data_from_file,
+                       DICT_ELEMENT_NAMES,
+                       run_a_method_on_satellites)
 
 
 
