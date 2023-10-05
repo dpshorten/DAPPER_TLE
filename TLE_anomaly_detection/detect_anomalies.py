@@ -41,8 +41,8 @@ INDICES_FOR_SHIFT_DECISION = [0, 2, 4, 5]
 def assimilate_for_one_satellite(satelliteTLEData_satellites,
                                  dict_shared_parameters,
                                  dict_parameters,
-                                 satellite_names_list,
-                                 satellite_index):
+                                 satellite_names_list = [],
+                                 satellite_index = 0):
 
     process_pool = multiprocessing.Pool(dict_parameters["dapper n jobs"])
 
@@ -74,7 +74,7 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
     propagation_covariance[3, 1] = -1
     propagation_covariance = scaling_matrix @ propagation_covariance @ scaling_matrix
 
-    print("eigenvalues of propagation covariance", sla.eigh(propagation_covariance)[0])
+    #print("eigenvalues of propagation covariance", sla.eigh(propagation_covariance)[0])
 
     xx = np.divide(
         get_np_mean_elements_from_satelliteTLEData_object(satelliteTLEData_satellites,
@@ -129,7 +129,7 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
         xp.assimilate(HMM,
                       xx[:],
                       yy[:],
-                      dict_method_parameters["shift threshold"],
+                      dict_parameters["shift threshold"],
                       INDICES_FOR_MARGINAL_ANOMALY_DETECTION,
                       INDICES_FOR_SHIFT_DECISION)
 
@@ -140,28 +140,28 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
                                    dict_shared_parameters["secondary detection column name"]]]
 
 
-    if dict_shared_parameters["satellite set"] == "simulated_video":
-        # Saving for the purpose of animation creation
-        pickle.dump(xp.particle_positions, open(dict_parameters["filter logs directory"] +
-                                                satellite_names_list[satellite_index] +
-                                                "_" + dict_parameters["method variant"] +
-                                                dict_parameters["particle positions log suffix"], "wb"))
-        pickle.dump(satelliteTLEData_satellites, open(dict_parameters["filter logs directory"] +
-                                                satellite_names_list[satellite_index] +
-                                                "_" + dict_parameters["method variant"] +
-                                                dict_parameters["satellites log suffix"], "wb"))
+    # if dict_shared_parameters["satellite set"] == "simulated_video":
+    #     # Saving for the purpose of animation creation
+    #     pickle.dump(xp.particle_positions, open(dict_parameters["filter logs directory"] +
+    #                                             satellite_names_list[satellite_index] +
+    #                                             "_" + dict_parameters["method variant"] +
+    #                                             dict_parameters["particle positions log suffix"], "wb"))
+    #     pickle.dump(satelliteTLEData_satellites, open(dict_parameters["filter logs directory"] +
+    #                                             satellite_names_list[satellite_index] +
+    #                                             "_" + dict_parameters["method variant"] +
+    #                                             dict_parameters["satellites log suffix"], "wb"))
 
-    pickle.dump(xp.n_effective, open(dict_parameters["filter logs directory"] +
-                                     satellite_names_list[satellite_index] +
-                                     "_" + dict_parameters["method variant"] +
-                                     dict_parameters["n effective log suffix"], "wb"))
+    # pickle.dump(xp.n_effective, open(dict_parameters["filter logs directory"] +
+    #                                  satellite_names_list[satellite_index] +
+    #                                  "_" + dict_parameters["method variant"] +
+    #                                  dict_parameters["n effective log suffix"], "wb"))
     return pd_df_results
 
-dict_shared_parameters = yaml.safe_load(open(sys.argv[1], 'r'))
-
-list_method_parameter_dicts = []
-for parameters_file_name in sys.argv[2:]:
-    list_method_parameter_dicts.append(yaml.safe_load(open(parameters_file_name, 'r')))
-
-for dict_method_parameters in list_method_parameter_dicts:
-    run_a_method_on_satellites(assimilate_for_one_satellite, dict_shared_parameters, dict_method_parameters, "../")
+# dict_shared_parameters = yaml.safe_load(open(sys.argv[1], 'r'))
+#
+# list_method_parameter_dicts = []
+# for parameters_file_name in sys.argv[2:]:
+#     list_method_parameter_dicts.append(yaml.safe_load(open(parameters_file_name, 'r')))
+#
+# for dict_method_parameters in list_method_parameter_dicts:
+#     run_a_method_on_satellites(assimilate_for_one_satellite, dict_shared_parameters, dict_method_parameters, "../")
