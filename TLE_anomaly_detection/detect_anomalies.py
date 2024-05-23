@@ -9,6 +9,7 @@ import yaml
 from scipy.stats import multivariate_normal
 from sklearn.covariance import MinCovDet, EmpiricalCovariance
 import pickle
+from functools import partial
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(this_directory + "/../")
@@ -51,8 +52,10 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
     pd_df_propagated_mean_elements = propagate_SatelliteTLEData_object(satelliteTLEData_satellites, 1)
     pd_df_residuals = (pd_df_propagated_mean_elements - satelliteTLEData_satellites.pd_df_tle_data).dropna()
 
-    q1 = pd_df_residuals.quantile(0.25)
-    q3 = pd_df_residuals.quantile(0.75)
+    #q1 = pd_df_residuals.quantile(0.25)
+    #q3 = pd_df_residuals.quantile(0.75)
+    q1 = pd_df_residuals.quantile(0.1)
+    q3 = pd_df_residuals.quantile(0.9)
     iqr = q3 - q1
     pd_df_residuals = pd_df_residuals[~((pd_df_residuals < (q1 - dict_parameters["covariance outlier removal factor"] * iqr))
                                         | (pd_df_residuals > (q3 + dict_parameters["covariance outlier removal factor"] * iqr))).any(axis=1)]
@@ -60,6 +63,8 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
     initial_residuals_covariance = EmpiricalCovariance(assume_centered = True).fit(np_residuals).covariance_
     # Normalise by variance to get an easier covariance matrix to work with
     normalisation_weights = np.sqrt(np.diag(initial_residuals_covariance))
+    # TODO: find a more principled way of doing this
+    #normalisation_weights[normalisation_weights == 0] = 1e-6
     final_residuals_covariance = EmpiricalCovariance(assume_centered = True).fit(np.divide(pd_df_residuals.values, normalisation_weights)).covariance_
 
     observation_covariance = np.diag(np.diag(final_residuals_covariance))
@@ -157,11 +162,13 @@ def assimilate_for_one_satellite(satelliteTLEData_satellites,
     #                                  dict_parameters["n effective log suffix"], "wb"))
     return pd_df_results
 
-# dict_shared_parameters = yaml.safe_load(open(sys.argv[1], 'r'))
-#
-# list_method_parameter_dicts = []
-# for parameters_file_name in sys.argv[2:]:
-#     list_method_parameter_dicts.append(yaml.safe_load(open(parameters_file_name, 'r')))
-#
-# for dict_method_parameters in list_method_parameter_dicts:
-#     run_a_method_on_satellites(assimilate_for_one_satellite, dict_shared_parameters, dict_method_parameters, "../")
+if __name__ == "__main__":
+
+    dict_shared_parameters = yaml.safe_load(open(sys.argv[1], 'r'))
+
+    list_method_parameter_dicts = []
+    for parameters_file_name in sys.argv[2:]:
+        list_method_parameter_dicts.append(yaml.safe_load(open(parameters_file_name, 'r')))
+
+    for dict_method_parameters in list_method_parameter_dicts:
+        run_a_method_on_satellites(assimilate_for_one_satellite, dict_shared_parameters, dict_method_parameters, "../")
