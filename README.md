@@ -30,6 +30,7 @@ Running code in this package requires the following packages to be situated at t
 The experiments on the benchmark and simulated data can be run using the shell scripts:
 - benchmark_set_script.sh
 - simulated_set_script.sh
+
 These can be found in the `scripts` directory.
 
 ## Package Structure
