@@ -10,7 +10,7 @@ has secondary detection columns: True
 primary detection column label: "full likelihood"
 secondary detection column label: "marginal likelihood"
 detection results save suffix: "_detections.pkl"
-method base directory: "/home/david/Projects/DAPPER_TLE/"
+method base directory: "./"
 detection results save directory: "./detection_results/"
 filter logs directory: "./filter_logs/"
 particle positions log suffix: "_particle_positions.pkl"
